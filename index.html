@@ -717,119 +717,52 @@ try{const records=JSON.parse(sessionStorage.getItem("WEARWISEDemoUsers")||"{}");
 function updateAccountButton(){const b=$("#accountBtn");b.textContent=state.user?"●":"♙";b.title=state.user?state.user.name:"Account"}
 function openAccount(){if(state.user){openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div style="padding:30px"><div class="kicker">Account / demo session</div><h2 style="font-size:34px;letter-spacing:-.07em">HEY, ${escapeHTML((state.user.name||"SHOPPER").split(" ")[0].toUpperCase())}.</h2><p class="muted">${escapeHTML(state.user.email||"Demo mode")}<br>Account features are simulated locally. No secure profile database is connected.</p><div style="display:grid;gap:10px;margin-top:22px"><button class="button outline full" id="profileOrders">Order history (demo)</button><button class="button dark full" id="logoutBtn">Log out</button></div></div>`,true);$("#profileOrders").onclick=()=>toast("No real orders are stored in this prototype.");$("#logoutBtn").onclick=()=>{state.user=null;updateAccountButton();closeModal();toast("Logged out")}}else openAuth("signup")}
 let cameraTarget=null;
-// Supabase browser connection: publishable key only; RLS limits this flow to reading size charts.
+// Supabase size-chart reader for the Fit Check flow only.
 const WW_SUPABASE_URL = "https://fggwdaechbszdqqutksf.supabase.co";
-const WW_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_f6SyqJDAZzreNFJ_3OgtgA_tSoz2Ie5";
-let wwSizeChartRows = null;
-let wwSizeChartLoadPromise = null;
-async function loadWearwiseSizeCharts(){
- if(wwSizeChartRows) return wwSizeChartRows;
- if(wwSizeChartLoadPromise) return wwSizeChartLoadPromise;
- wwSizeChartLoadPromise=(async()=>{
-  const url=WW_SUPABASE_URL+"/rest/v1/wearwise_size_charts?select=*&order=brand_name.asc&limit=1000";
-  const response=await fetch(url,{headers:{apikey:WW_SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+WW_SUPABASE_PUBLISHABLE_KEY}});
-  if(!response.ok){let detail="";try{detail=(await response.json()).message||""}catch(e){};throw new Error(detail||("Supabase returned HTTP "+response.status))}
-  const rows=await response.json();
-  if(!Array.isArray(rows)) throw new Error("The size-chart response was not a list.");
-  wwSizeChartRows=rows;
-  return rows;
- })();
- try{return await wwSizeChartLoadPromise}catch(error){wwSizeChartLoadPromise=null;throw error}
-}
-function wwUniqueSorted(rows,key){return [...new Set(rows.map(r=>String(r[key]??"").trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"}))}
-function wwFillSelect(id,values,placeholder,selectedValue=""){
- const el=$("#"+id);if(!el)return;
- el.innerHTML=`<option value="">${escapeHTML(placeholder)}</option>`+values.map(v=>`<option value="${escapeHTML(v)}" ${v===selectedValue?"selected":""}>${escapeHTML(v)}</option>`).join("");
-}
-function wwSelectedChartRows(){
- if(!wwSizeChartRows)return [];
- const department=$("#fitDepartment")?.value||"";
- const brand=$("#fitBrand")?.value||"";
- const category=$("#fitCategory")?.value||"";
- const type=$("#fitGarmentType")?.value||"";
- return wwSizeChartRows.filter(r=>(!department||r.department===department)&&(!brand||r.brand_name===brand)&&(!category||r.garment_category===category)&&(!type||r.garment_type===type));
-}
-function wwRefreshChartFilters(changed){
- if(!wwSizeChartRows)return;
- const department=$("#fitDepartment").value;
- const rowsForDept=wwSizeChartRows.filter(r=>!department||r.department===department);
- const currentBrand=$("#fitBrand").value;
- const brands=wwUniqueSorted(rowsForDept,"brand_name");
- wwFillSelect("fitBrand",brands,"Choose brand",brands.includes(currentBrand)?currentBrand:"");
- const rowsForBrand=rowsForDept.filter(r=>!$("#fitBrand").value||r.brand_name===$("#fitBrand").value);
- const currentCategory=$("#fitCategory").value;
- const categories=wwUniqueSorted(rowsForBrand,"garment_category");
- wwFillSelect("fitCategory",categories,"Choose category",categories.includes(currentCategory)?currentCategory:"");
- const rowsForCategory=rowsForBrand.filter(r=>!$("#fitCategory").value||r.garment_category===$("#fitCategory").value);
- const currentType=$("#fitGarmentType").value;
- const types=wwUniqueSorted(rowsForCategory,"garment_type");
- wwFillSelect("fitGarmentType",types,"Choose garment type",types.includes(currentType)?currentType:"");
- const rows=wwSelectedChartRows();
- const status=$("#fitDbStatus");
- if(status)status.textContent=`${rows.length} matching size-chart row${rows.length===1?"":"s"} available`;
-}
-async function initWearwiseFitDatabase(){
- const status=$("#fitDbStatus");
- if(status)status.textContent="Connecting to size charts…";
- try{
-  const rows=await loadWearwiseSizeCharts();
-  if(!$("#fitDepartment"))return;
-  wwFillSelect("fitDepartment",wwUniqueSorted(rows,"department"),"Choose department");
-  wwRefreshChartFilters();
-  if(status)status.textContent=`Connected · ${rows.length} size-chart rows across ${wwUniqueSorted(rows,"brand_name").length} brands`;
- }catch(error){
-  console.error("WEARWISE size chart connection error:",error);
-  if(status)status.textContent="Could not load size charts. Check the Supabase table, publishable key, and public SELECT policy.";
-  const result=$("#fitResult");if(result)result.innerHTML=`<div class="form-error">Size charts could not be loaded from the database. ${escapeHTML(error.message||"Please try again.")}</div>`;
- }
+const WW_SUPABASE_PUBLISHABLE_KEY = "sb_publishable_f6SyqJDAZzreNF_3OgtgA_tSoz2Ie5";
+let wwFitRows = null;
+async function loadWWFitRows(){
+ if(wwFitRows) return wwFitRows;
+ const res=await fetch(WW_SUPABASE_URL+"/rest/v1/wearwise_size_charts?select=*&order=brand_name.asc&limit=1000",{headers:{apikey:WW_SUPABASE_PUBLISHABLE_KEY,Authorization:"Bearer "+WW_SUPABASE_PUBLISHABLE_KEY}});
+ if(!res.ok) throw new Error("Supabase returned HTTP "+res.status);
+ wwFitRows=await res.json(); return wwFitRows;
 }
 function openFitCheck(){
- closeDrawer();stopCamera();if(!state.lastFitProduct)state.lastFitProduct=products[0];const p=state.lastFitProduct;
- state.photoURL=null;state.photoFile=null;state.lastFitResult=null;
- openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div class="fit-layout"><aside class="fit-aside"><div class="eyebrow">WEARWISE / Fit Check</div><h2>FIND YOUR<br>ACTUAL<br><span style="color:var(--lime)">FIT.</span></h2><p>Choose a brand and garment, then compare your measurements with the size-chart records stored in WEARWISE.</p><div style="margin-top:25px;border-top:1px solid #30342b;padding-top:18px;font-size:10px;letter-spacing:.1em;color:#b7bbae">01 CHART · 02 MEASURE · 03 COMPARE</div></aside><div class="fit-main"><div class="kicker">01 / Choose size chart</div><div class="field"><label for="fitDepartment">Department</label><select id="fitDepartment"><option value="">Loading departments…</option></select></div><div class="field"><label for="fitBrand">Brand</label><select id="fitBrand"><option value="">Choose brand</option></select></div><div class="field-row"><div class="field"><label for="fitCategory">Garment category</label><select id="fitCategory"><option value="">Choose category</option></select></div><div class="field"><label for="fitGarmentType">Garment type</label><select id="fitGarmentType"><option value="">Choose type</option></select></div></div><p class="form-note" id="fitDbStatus" aria-live="polite">Connecting to your size-chart database…</p><hr class="hr"><div class="field"><label>02 / Photo (optional preview)</label><div class="upload-box" id="uploadBox"><div id="uploadContents"><div class="big-icon">▧</div><strong>Upload or capture a photo</strong><p class="form-note">Photo preview only. This page does not extract body measurements from the image.</p><div class="upload-actions"><button class="button small" id="choosePhoto">Upload photo</button><button class="button outline small" id="startCamera">Open camera</button></div></div></div><div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline></video><div class="upload-actions"><button class="button small" id="capturePhoto">Capture photo</button><button class="button outline small" id="stopCameraBtn">Stop camera</button></div></div></div><div class="field"><label>03 / Your measurements (cm)</label><div class="field-row"><div class="field"><label for="chestInput">Chest / bust</label><input id="chestInput" type="number" min="40" max="180" placeholder="e.g. 100"></div><div class="field"><label for="waistInput">Waist</label><input id="waistInput" type="number" min="40" max="180" placeholder="e.g. 82"></div></div><div class="field"><label for="hipInput">Hip / seat (optional)</label><input id="hipInput" type="number" min="40" max="180" placeholder="e.g. 98"></div><p class="form-note">Enter the measurements relevant to the selected garment. Recommendations can only use dimensions present in that chart's records.</p></div><button class="button dark full" id="analyzeBtn">Compare with database ↗</button><div id="fitResult"></div></div></div>`);
- $("#fitDepartment").onchange=()=>{wwRefreshChartFilters("department");$("#fitResult").innerHTML=""};
- $("#fitBrand").onchange=()=>{wwRefreshChartFilters("brand");$("#fitResult").innerHTML=""};
- $("#fitCategory").onchange=()=>{wwRefreshChartFilters("category");$("#fitResult").innerHTML=""};
- $("#fitGarmentType").onchange=()=>{const rows=wwSelectedChartRows();const status=$("#fitDbStatus");if(status)status.textContent=`${rows.length} matching size-chart row${rows.length===1?"":"s"} available`;$("#fitResult").innerHTML=""};
- $("#choosePhoto").onclick=()=>$("#photoFileInput").click();$("#startCamera").onclick=startCamera;$("#capturePhoto").onclick=capturePhoto;$("#stopCameraBtn").onclick=stopCamera;$("#analyzeBtn").onclick=analyzeFit;
- initWearwiseFitDatabase();
+ closeDrawer();stopCamera();state.photoURL=null;state.photoFile=null;state.lastFitResult=null;
+ openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button>
+ <div class="fit-layout"><aside class="fit-aside"><div class="eyebrow">WEARWISE / FIT FINDER</div><h2>YOUR BODY.<br>YOUR STYLE.<br><span style="color:var(--lime)">YOUR FIT.</span></h2><p>Choose what you want to shop for, scan with your camera, and compare available brand size charts.</p><div style="margin-top:25px;border-top:1px solid #30342b;padding-top:18px;font-size:10px;letter-spacing:.1em;color:#b7bbae">01 YOU · 02 SCAN · 03 DISCOVER BRANDS</div></aside>
+ <div class="fit-main"><div class="kicker">01 / What are you shopping for?</div>
+ <div class="field"><label for="fitDepartment">Department</label><select id="fitDepartment"><option value="">Choose department</option><option value="Men">Men</option><option value="Women">Women</option></select></div>
+ <div class="field"><label for="fitGarmentGroup">Clothing type</label><select id="fitGarmentGroup"><option value="">Choose tops or bottoms</option><option value="tops">Tops — shirts, T-shirts, blouses, kurtis, jackets</option><option value="bottoms">Bottoms — jeans, trousers, skirts, shorts</option></select></div>
+ <div class="field"><label for="fitPreference">Preferred fit</label><select id="fitPreference"><option value="regular">Regular fit</option><option value="slim">Slim / fitted</option><option value="relaxed">Relaxed / oversized</option></select></div>
+ <hr class="hr"><div class="kicker">02 / Camera scan</div>
+ <div class="upload-box" id="uploadBox"><div id="uploadContents"><div class="big-icon">◎</div><strong>Scan your body with the camera</strong><p class="form-note">Stand straight, keep your full body in frame, wear ordinary fitted clothing, and use good lighting. You won't need to type chest or waist measurements.</p><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload full-body photo</button></div></div></div>
+ <div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline></video><div class="upload-actions"><button class="button small" id="capturePhoto">Capture scan</button><button class="button outline small" id="stopCameraBtn">Stop camera</button></div></div>
+ <p class="form-note" id="fitDbStatus" aria-live="polite">Connecting to brand size charts…</p>
+ <button class="button dark full" id="analyzeBtn" style="margin-top:14px">Find my brand fits ↗</button><div id="fitResult"></div>
+ </div></div>`);
+ const resetPhoto=()=>{const c=$("uploadContents");if(c)c.innerHTML=`<div class="big-icon">◎</div><strong>Scan your body with the camera</strong><p class="form-note">Stand straight, keep your full body in frame, wear ordinary fitted clothing, and use good lighting. You won't need to type chest or waist measurements.</p><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload full-body photo</button></div>`;$("startCamera").onclick=startCamera;$("choosePhoto").onclick=()=>$("photoFileInput").click();$("fitResult").innerHTML=""};
+ $("choosePhoto").onclick=()=>$("photoFileInput").click();$("startCamera").onclick=startCamera;$("capturePhoto").onclick=capturePhoto;$("stopCameraBtn").onclick=stopCamera;
+ $("analyzeBtn").onclick=async()=>{
+  const result=$("fitResult"),department=$("fitDepartment").value,group=$("fitGarmentGroup").value,preference=$("fitPreference").value;
+  if(!department||!group){result.innerHTML='<div class="form-error">Choose a department and tops or bottoms first.</div>';return}
+  if(!state.photoURL){result.innerHTML='<div class="form-error">Please capture a camera scan or upload a full-body photo first.</div>';return}
+  result.innerHTML='<div class="result-box"><h3>Checking brand charts…</h3><p>Loading available size charts for your selection.</p></div>';
+  try{
+   const rows=await loadWWFitRows();
+   const relevant=rows.filter(r=>String(r.department||"").toLowerCase()===department.toLowerCase() && (group==="tops" ? /top|shirt|t-shirt|tee|blouse|kurti|jacket|outerwear|blazer|dress|sweater/i.test((r.garment_category||"")+" "+(r.garment_type||"")) : /bottom|jean|trouser|pant|skirt|short|legging/i.test((r.garment_category||"")+" "+(r.garment_type||""))));
+   const brands=[...new Set(relevant.map(r=>r.brand_name).filter(Boolean))].sort();
+   result.innerHTML=`<div class="result-box"><div class="kicker">Your fit journey</div><h3>Camera scan received</h3><p>Your photo is ready. We found <strong>${brands.length} brands</strong> with matching ${department.toLowerCase()} ${group} chart records${brands.length?":":"."}</p>${brands.length?`<div style="display:flex;flex-wrap:wrap;gap:7px;margin:14px 0">${brands.map(b=>`<span style="display:inline-block;padding:8px 11px;border:1px solid rgba(20,45,94,.18);border-radius:999px;font-size:11px;font-weight:800">${escapeHTML(b)}</span>`).join("")}</div>`:""}<p>Preferred fit: <strong>${escapeHTML(preference)}</strong></p><p><strong>Important:</strong> this page can retrieve brand charts, but a calibrated camera body-measurement model is not connected yet. I won't invent your chest/waist measurements or pretend this scan produced an accurate size. The next required piece is the actual vision model that estimates body dimensions before we can rank these brands by your fit.</p></div>`;
+   const status=$("fitDbStatus");if(status)status.textContent=`Database connected · ${rows.length} charts · ${brands.length} matching brands`;
+  }catch(err){result.innerHTML=`<div class="form-error">Couldn't load brand charts from Supabase: ${escapeHTML(err.message||"unknown error")}</div>`}
+ };
+ $("photoFileInput").onchange=e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith("image/")){toast("Please choose an image file");return}if(file.size>8*1024*1024){toast("Image must be smaller than 8 MB");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=file;state.photoURL=URL.createObjectURL(file);stopCamera();$("uploadContents").innerHTML=`<img class="preview-img" src="${state.photoURL}" alt="Full-body scan preview"><strong>Scan image ready</strong><p class="form-note">Photo selected. The actual camera measurement model is still required for reliable size predictions.</p><div class="upload-actions"><button class="button outline small" id="replacePhoto">Replace photo</button></div>`;$("replacePhoto").onclick=()=>$("photoFileInput").click();$("fitResult").innerHTML="";e.target.value=""};
+ loadWWFitRows().then(rows=>{const status=$("fitDbStatus");if(status)status.textContent=`Connected · ${rows.length} size-chart rows loaded`}).catch(err=>{const status=$("fitDbStatus");if(status)status.textContent="Size charts could not be loaded: "+err.message});
 }
-function showPhoto(url){const contents=$("#uploadContents");if(!contents)return;contents.innerHTML=`<img class="preview-img" src="${url}" alt="Selected photo preview"><strong>Photo ready</strong><p class="form-note">Preview only — no AI body measurement has been performed.</p><div class="upload-actions"><button class="button small" id="replacePhoto">Replace photo</button><button class="button outline small" id="removePhoto">Remove photo</button></div>`;$("#replacePhoto").onclick=()=>$("#photoFileInput").click();$("#removePhoto").onclick=()=>{state.photoURL=null;state.photoFile=null;contents.innerHTML=`<div class="big-icon">▧</div><strong>Upload or capture a photo</strong><p class="form-note">Photo preview only; it is not measured by an AI model.</p><div class="upload-actions"><button class="button small" id="choosePhoto">Upload photo</button><button class="button outline small" id="startCamera">Open camera</button></div>`;$("#choosePhoto").onclick=()=>$("#photoFileInput").click();$("#startCamera").onclick=startCamera;$("#fitResult").innerHTML=""}}
-$("#photoFileInput").addEventListener("change",e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith("image/")){toast("Please choose an image file");return}if(file.size>8*1024*1024){toast("Image must be smaller than 8 MB");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=file;state.photoURL=URL.createObjectURL(file);showPhoto(state.photoURL);$("#fitResult").innerHTML="";e.target.value=""});
-async function startCamera(){const controls=$("#cameraControls");if(!controls)return;if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast("Camera isn't supported here. Use photo upload instead.");return}try{state.cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});const video=$("#cameraVideo");video.srcObject=state.cameraStream;controls.classList.remove("hidden")}catch(err){toast("Camera access denied or unavailable. Allow permission or upload a photo.")}}
-function stopCamera(){if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>t.stop());state.cameraStream=null}const video=$("#cameraVideo");if(video)video.srcObject=null;const controls=$("#cameraControls");if(controls)controls.classList.add("hidden")}
-function capturePhoto(){const video=$("#cameraVideo");if(!video||!video.videoWidth){toast("Camera is still starting. Try again in a moment.");return}const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext("2d").drawImage(video,0,0);canvas.toBlob(blob=>{if(!blob){toast("Could not capture photo");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=new File([blob],"WEARWISE-camera-capture.jpg",{type:"image/jpeg"});state.photoURL=URL.createObjectURL(blob);stopCamera();showPhoto(state.photoURL);$("#fitResult").innerHTML=""},"image/jpeg",.9)}
-function analyzeFit(){
- const rows=wwSelectedChartRows();const result=$("#fitResult");
- if(!wwSizeChartRows){result.innerHTML='<div class="form-error">The database is not connected yet. Wait for the status above or reopen Fit Check.</div>';return}
- if(!$("#fitDepartment").value||!$("#fitBrand").value||!$("#fitCategory").value||!$("#fitGarmentType").value){result.innerHTML='<div class="form-error">Choose a department, brand, category, and garment type first.</div>';return}
- if(!rows.length){result.innerHTML='<div class="form-error">No size-chart rows match those selections. Try a different garment type.</div>';return}
- const entered=[
-  {label:"Chest / bust",value:Number($("#chestInput").value),min:"chest_bust_min_cm",max:"chest_bust_max_cm"},
-  {label:"Waist",value:Number($("#waistInput").value),min:"waist_min_cm",max:"waist_max_cm"},
-  {label:"Hip / seat",value:Number($("#hipInput").value),min:"seat_hip_min_cm",max:"seat_hip_max_cm"}
- ].filter(m=>Number.isFinite(m.value)&&m.value>0);
- if(!entered.length){result.innerHTML='<div class="form-error">Enter at least one measurement in centimetres to compare with the chart.</div>';return}
- const scored=rows.map(row=>{
-  const comparisons=entered.filter(m=>row[m.min]!=null&&row[m.max]!=null&&Number.isFinite(Number(row[m.min]))&&Number.isFinite(Number(row[m.max]))).map(m=>{
-   const lo=Number(row[m.min]),hi=Number(row[m.max]);
-   return {label:m.label,value:m.value,lo,hi,distance:m.value<lo?lo-m.value:m.value>hi?m.value-hi:0,inside:m.value>=lo&&m.value<=hi};
-  });
-  if(!comparisons.length)return null;
-  const outside=comparisons.reduce((sum,c)=>sum+c.distance,0);
-  const insideCount=comparisons.filter(c=>c.inside).length;
-  const midpointDistance=comparisons.reduce((sum,c)=>sum+Math.abs(c.value-((c.lo+c.hi)/2)),0);
-  return {row,comparisons,outside,insideCount,score:outside*100+midpointDistance};
- }).filter(Boolean).sort((a,b)=>b.insideCount-a.insideCount||a.outside-b.outside||a.score-b.score);
- if(!scored.length){result.innerHTML='<div class="form-error">The selected chart rows do not contain ranges for the measurement(s) entered. Try the measurement normally used for this garment.</div>';return}
- const best=scored[0],row=best.row,label=row.displayed_size_label||row.eu_size||row.us_size||row.uk_size||"Size unavailable";
- const ranges=best.comparisons.map(c=>`${escapeHTML(c.label)}: ${c.lo}–${c.hi} cm${c.inside?" ✓":" (outside range)"}`).join("<br>");
- const reason=best.outside===0?"All entered measurements with available ranges fall within this size's chart ranges.":`This is the closest match among the available rows; the entered measurements exceed one or more chart ranges by a combined ${best.outside.toFixed(1)} cm. Consider checking adjacent sizes.`;
- const source=row.source_url?`<p><a href="${escapeHTML(row.source_url)}" target="_blank" rel="noopener noreferrer" style="text-decoration:underline">Open chart source ↗</a></p>`:"";
- const status=row.verification_status?`<div class="form-note">Chart status: ${escapeHTML(row.verification_status)}</div>`:"";
- state.lastFitResult={size:label,brand:row.brand_name,category:row.garment_category,type:row.garment_type,measurements:entered};
- result.innerHTML=`<div class="result-box"><div class="kicker">Database chart comparison</div><h3>Closest matching size</h3><div class="result-size">${escapeHTML(label)}</div><p><strong>${escapeHTML(row.brand_name)} · ${escapeHTML(row.department)} · ${escapeHTML(row.garment_type)}</strong></p><p>${escapeHTML(reason)}</p><div style="font-size:12px;line-height:1.9">${ranges}</div>${status}${row.source_notes?`<p class="form-note">${escapeHTML(row.source_notes)}</p>`:""}${source}</div><div class="disclaimer"><strong>Size-chart comparison, not a guarantee of fit.</strong> This uses the measurements stored in the selected database row. Photo upload/camera is only a preview; no body measurements are extracted from the photo. Check the source chart and garment fit before purchasing.</div>`;
-}
+function showPhoto(url){const contents=$("uploadContents");if(!contents)return;contents.innerHTML=`<img class="preview-img" src="${url}" alt="Selected photo preview"><strong>Scan image ready</strong><p class="form-note">Photo preview only; a calibrated body-measurement model is needed before a size can be predicted.</p>`}
+async function startCamera(){const controls=$("cameraControls");if(!controls)return;if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast("Camera isn't supported here. Use photo upload instead.");return}try{state.cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});const video=$("cameraVideo");video.srcObject=state.cameraStream;controls.classList.remove("hidden")}catch(err){toast("Camera access denied or unavailable. Allow permission or upload a photo.")}}
+function stopCamera(){if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>t.stop());state.cameraStream=null}const video=$("cameraVideo");if(video)video.srcObject=null;const controls=$("cameraControls");if(controls)controls.classList.add("hidden")}
+function capturePhoto(){const video=$("cameraVideo");if(!video||!video.videoWidth){toast("Camera is still starting. Try again in a moment.");return}const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext("2d").drawImage(video,0,0);canvas.toBlob(blob=>{if(!blob){toast("Could not capture photo");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=new File([blob],"WEARWISE-camera-capture.jpg",{type:"image/jpeg"});state.photoURL=URL.createObjectURL(blob);stopCamera();$("uploadContents").innerHTML=`<img class="preview-img" src="${state.photoURL}" alt="Camera scan preview"><strong>Camera scan captured</strong><p class="form-note">Ready to compare available brand charts.</p><div class="upload-actions"><button class="button outline small" id="replacePhoto">Retake / replace</button></div>`;$("replacePhoto").onclick=()=>{$("uploadContents").innerHTML=`<div class="big-icon">◎</div><strong>Scan your body with the camera</strong><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload full-body photo</button></div>`;$("startCamera").onclick=startCamera;$("choosePhoto").onclick=()=>$("photoFileInput").click()};$("fitResult").innerHTML=""},"image/jpeg",.9)}
 function openNewsletter(){openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div style="padding:30px"><div class="kicker">WEARWISE / Stay in the loop</div><h2 style="font-size:36px;letter-spacing:-.07em">GOOD THINGS<br>INCOMING.</h2><p class="muted">This newsletter is a frontend demo. No email will be sent or saved.</p><form id="newsletterForm"><div class="field"><label for="newsEmail">Email address</label><input type="email" id="newsEmail" required placeholder="you@example.com"></div><button class="button dark full">Join the list ↗</button></form></div>`,true);$("#newsletterForm").onsubmit=e=>{e.preventDefault();closeModal();toast("Demo signup complete — connect an email service to collect subscriptions.")}}
 $("#searchInput").addEventListener("input",e=>{state.search=e.target.value;renderProducts()});$("#categoryFilter").onchange=e=>{state.category=e.target.value;renderProducts()};$("#sectionFilter").onchange=e=>{state.section=e.target.value;renderProducts()};$("#brandFilter").onchange=e=>{state.brand=e.target.value;renderProducts()};$("#priceFilter").onchange=e=>{state.price=e.target.value;renderProducts()};$("#sortFilter").onchange=e=>{state.sort=e.target.value;renderProducts()};
 $("#cartBtn").onclick=openCart;$("#wishlistBtn").onclick=openWishlist;$("#accountBtn").onclick=openAccount;$("#heroFitBtn").onclick=openFitCheck;$("#fitBannerBtn").onclick=openFitCheck;$("#menuToggle").onclick=()=>$("#navLinks").classList.toggle("open");$$("[data-nav]").forEach(a=>a.addEventListener("click",()=>$("#navLinks").classList.remove("open")));$$("[data-category]").forEach(a=>a.addEventListener("click",()=>{state.category=a.dataset.category;state.section=a.dataset.section||"";$("#categoryFilter").value=state.category;$("#sectionFilter").value=state.section;renderProducts()}));$("#accountFooter").onclick=e=>{e.preventDefault();openAccount()};$("#newsletterLink").onclick=e=>{e.preventDefault();openNewsletter()};$$("[data-info]").forEach(a=>a.onclick=e=>{e.preventDefault();toast(a.dataset.info)});window.addEventListener("beforeunload",()=>{stopCamera();if(state.photoURL)URL.revokeObjectURL(state.photoURL)});
