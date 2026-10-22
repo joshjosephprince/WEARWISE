@@ -736,8 +736,9 @@ function openFitCheck(){
  <div class="field"><label for="fitGarmentGroup">Clothing type</label><select id="fitGarmentGroup"><option value="">Choose tops or bottoms</option><option value="tops">Tops — shirts, T-shirts, blouses, kurtis, jackets</option><option value="bottoms">Bottoms — jeans, trousers, skirts, shorts</option></select></div>
  <div class="field"><label for="fitPreference">Preferred fit</label><select id="fitPreference"><option value="regular">Regular fit</option><option value="slim">Slim / fitted</option><option value="relaxed">Relaxed / oversized</option></select></div>
  <hr class="hr"><div class="kicker">02 / Camera scan</div>
- <div class="upload-box" id="uploadBox"><div id="uploadContents"><div class="big-icon">◎</div><strong>Scan your body with the camera</strong><p class="form-note">Stand straight, keep your full body in frame, wear ordinary fitted clothing, and use good lighting. You won't need to type chest or waist measurements.</p><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload full-body photo</button></div></div></div>
- <div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline></video><div class="upload-actions"><button class="button small" id="capturePhoto">Capture scan</button><button class="button outline small" id="stopCameraBtn">Stop camera</button></div></div>
+ <div class="upload-box" id="uploadBox"><div id="uploadContents"><div class="big-icon">◎</div><strong>Scan your body with the camera</strong><p class="form-note">Stand straight, keep your full body in frame, wear ordinary fitted clothing, and use good lighting. You won't need to type chest or waist measurements.</p><div class="upload-actions"><button type="button" class="button small" id="startCamera">Open camera</button><button type="button" class="button outline small" id="choosePhoto">Upload full-body photo</button></div></div></div>
+ <p class="form-note" id="cameraStatus" aria-live="polite" style="margin:10px 0 0"></p>
+ <div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline muted></video><div class="upload-actions"><button type="button" class="button small" id="capturePhoto">Capture scan</button><button type="button" class="button outline small" id="stopCameraBtn">Stop camera</button></div></div>
  <p class="form-note" id="fitDbStatus" aria-live="polite">Connecting to brand size charts…</p>
  <button class="button dark full" id="analyzeBtn" style="margin-top:14px">Find my brand fits ↗</button><div id="fitResult"></div>
  </div></div>`);
@@ -756,13 +757,70 @@ function openFitCheck(){
    const status=$("fitDbStatus");if(status)status.textContent=`Database connected · ${rows.length} charts · ${brands.length} matching brands`;
   }catch(err){result.innerHTML=`<div class="form-error">Couldn't load brand charts from Supabase: ${escapeHTML(err.message||"unknown error")}</div>`}
  };
- $("photoFileInput").onchange=e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith("image/")){toast("Please choose an image file");return}if(file.size>8*1024*1024){toast("Image must be smaller than 8 MB");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=file;state.photoURL=URL.createObjectURL(file);stopCamera();$("uploadContents").innerHTML=`<img class="preview-img" src="${state.photoURL}" alt="Full-body scan preview"><strong>Scan image ready</strong><p class="form-note">Photo selected. The actual camera measurement model is still required for reliable size predictions.</p><div class="upload-actions"><button class="button outline small" id="replacePhoto">Replace photo</button></div>`;$("replacePhoto").onclick=()=>$("photoFileInput").click();$("fitResult").innerHTML="";e.target.value=""};
+ $("photoFileInput").onchange=e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith("image/")){toast("Please choose an image file");return}if(file.size>8*1024*1024){toast("Image must be smaller than 8 MB");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=file;state.photoURL=URL.createObjectURL(file);stopCamera();setCameraStatus("Photo uploaded. The image is available as a preview; automatic measurements are not generated yet.");$("uploadContents").innerHTML=`<img class="preview-img" src="${state.photoURL}" alt="Full-body scan preview"><strong>Scan image ready</strong><p class="form-note">Photo selected. The actual camera measurement model is still required for reliable size predictions.</p><div class="upload-actions"><button class="button outline small" id="replacePhoto">Replace photo</button></div>`;$("replacePhoto").onclick=()=>$("photoFileInput").click();$("fitResult").innerHTML="";e.target.value=""};
  loadWWFitRows().then(rows=>{const status=$("fitDbStatus");if(status)status.textContent=`Connected · ${rows.length} size-chart rows loaded`}).catch(err=>{const status=$("fitDbStatus");if(status)status.textContent="Size charts could not be loaded: "+err.message});
 }
 function showPhoto(url){const contents=$("uploadContents");if(!contents)return;contents.innerHTML=`<img class="preview-img" src="${url}" alt="Selected photo preview"><strong>Scan image ready</strong><p class="form-note">Photo preview only; a calibrated body-measurement model is needed before a size can be predicted.</p>`}
-async function startCamera(){const controls=$("cameraControls");if(!controls)return;if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast("Camera isn't supported here. Use photo upload instead.");return}try{state.cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});const video=$("cameraVideo");video.srcObject=state.cameraStream;controls.classList.remove("hidden")}catch(err){toast("Camera access denied or unavailable. Allow permission or upload a photo.")}}
-function stopCamera(){if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>t.stop());state.cameraStream=null}const video=$("cameraVideo");if(video)video.srcObject=null;const controls=$("cameraControls");if(controls)controls.classList.add("hidden")}
-function capturePhoto(){const video=$("cameraVideo");if(!video||!video.videoWidth){toast("Camera is still starting. Try again in a moment.");return}const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext("2d").drawImage(video,0,0);canvas.toBlob(blob=>{if(!blob){toast("Could not capture photo");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=new File([blob],"WEARWISE-camera-capture.jpg",{type:"image/jpeg"});state.photoURL=URL.createObjectURL(blob);stopCamera();$("uploadContents").innerHTML=`<img class="preview-img" src="${state.photoURL}" alt="Camera scan preview"><strong>Camera scan captured</strong><p class="form-note">Ready to compare available brand charts.</p><div class="upload-actions"><button class="button outline small" id="replacePhoto">Retake / replace</button></div>`;$("replacePhoto").onclick=()=>{$("uploadContents").innerHTML=`<div class="big-icon">◎</div><strong>Scan your body with the camera</strong><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload full-body photo</button></div>`;$("startCamera").onclick=startCamera;$("choosePhoto").onclick=()=>$("photoFileInput").click()};$("fitResult").innerHTML=""},"image/jpeg",.9)}
+function setCameraStatus(message, isError=false){
+ const status=$("cameraStatus");
+ if(!status)return;
+ status.textContent=message||"";
+ status.className=isError?"form-note form-error":"form-note";
+}
+async function startCamera(){
+ const controls=$("cameraControls"),video=$("cameraVideo");
+ if(!controls||!video){setCameraStatus("The camera panel is not ready. Close Fit Check and open it again.",true);return}
+ if(state.cameraStream)stopCamera();
+ setCameraStatus("Requesting camera access… please allow the browser permission prompt.");
+ const secure=window.isSecureContext || location.protocol==="https:" || location.hostname==="localhost";
+ if(!secure){setCameraStatus("Camera access requires HTTPS. Open the live GitHub Pages website (https://joshjosephprince.github.io/WEARWISE/) directly in Safari or Chrome, not a downloaded HTML preview.",true);return}
+ if(!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia!=="function"){
+  setCameraStatus("This browser view does not provide camera access. Open the live HTTPS website directly in Safari or Chrome, then try again.",true);return;
+ }
+ let stream=null;
+ try{
+  try{
+   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"user"},width:{ideal:1280},height:{ideal:720}},audio:false});
+  }catch(firstError){
+   if(["NotAllowedError","PermissionDeniedError","SecurityError"].includes(firstError&&firstError.name))throw firstError;
+   stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+  }
+  state.cameraStream=stream;
+  video.autoplay=true;video.playsInline=true;video.muted=true;video.srcObject=stream;
+  controls.classList.remove("hidden");
+  await video.play();
+  setCameraStatus("Camera is on. Keep your full body in frame. Photo capture is a preview only; automatic body measurement is not connected yet.");
+  const track=stream.getVideoTracks()[0];
+  if(track && track.readyState!=="live")throw new Error("The camera track ended before video could start.");
+ }catch(err){
+  if(stream)stream.getTracks().forEach(t=>{try{t.stop()}catch(_){}});
+  if(state.cameraStream===stream)state.cameraStream=null;
+  video.srcObject=null;controls.classList.add("hidden");
+  const name=err&&err.name||"CameraError";
+  let message;
+  if(name==="NotAllowedError"||name==="PermissionDeniedError"||name==="SecurityError"){
+   message="Camera permission was blocked. In Safari, open Safari > Settings > Websites > Camera and allow this site. Also check Mac System Settings > Privacy & Security > Camera and allow Safari. Reload the page and try again.";
+  }else if(name==="NotFoundError"||name==="DevicesNotFoundError"){
+   message="No camera was found. Check that your Mac has a camera and that it is available, then try again.";
+  }else if(name==="NotReadableError"||name==="TrackStartError"){
+   message="The camera may be in use by another app. Close FaceTime, Zoom, or other apps using the camera, then try again.";
+  }else if(name==="OverconstrainedError"){
+   message="The browser could not use the requested camera settings. Try reloading the page or use photo upload instead.";
+  }else if(name==="AbortError"){
+   message="The browser stopped the camera from starting. Reload the page and try again.";
+  }else{
+   message="Camera could not start ("+name+"). "+(err&&err.message?err.message:"Check browser permissions and try again.");
+  }
+  setCameraStatus(message,true);
+  console.error("WEARWISE camera start failed:",err);
+ }
+}
+function stopCamera(){
+ if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>{try{t.stop()}catch(_){}});state.cameraStream=null}
+ const video=$("cameraVideo");if(video){video.pause();video.srcObject=null}
+ const controls=$("cameraControls");if(controls)controls.classList.add("hidden");
+}
+function capturePhoto(){const video=$("cameraVideo");if(!video||!video.videoWidth){toast("Camera is still starting. Try again in a moment.");return}const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext("2d").drawImage(video,0,0);canvas.toBlob(blob=>{if(!blob){toast("Could not capture photo");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=new File([blob],"WEARWISE-camera-capture.jpg",{type:"image/jpeg"});state.photoURL=URL.createObjectURL(blob);stopCamera();setCameraStatus("Camera scan captured. The image is available as a preview; automatic measurements are not generated yet.");$("uploadContents").innerHTML=`<img class="preview-img" src="${state.photoURL}" alt="Camera scan preview"><strong>Camera scan captured</strong><p class="form-note">Ready to compare available brand charts.</p><div class="upload-actions"><button class="button outline small" id="replacePhoto">Retake / replace</button></div>`;$("replacePhoto").onclick=()=>{$("uploadContents").innerHTML=`<div class="big-icon">◎</div><strong>Scan your body with the camera</strong><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload full-body photo</button></div>`;$("startCamera").onclick=startCamera;$("choosePhoto").onclick=()=>$("photoFileInput").click()};$("fitResult").innerHTML=""},"image/jpeg",.9)}
 function openNewsletter(){openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div style="padding:30px"><div class="kicker">WEARWISE / Stay in the loop</div><h2 style="font-size:36px;letter-spacing:-.07em">GOOD THINGS<br>INCOMING.</h2><p class="muted">This newsletter is a frontend demo. No email will be sent or saved.</p><form id="newsletterForm"><div class="field"><label for="newsEmail">Email address</label><input type="email" id="newsEmail" required placeholder="you@example.com"></div><button class="button dark full">Join the list ↗</button></form></div>`,true);$("#newsletterForm").onsubmit=e=>{e.preventDefault();closeModal();toast("Demo signup complete — connect an email service to collect subscriptions.")}}
 $("#searchInput").addEventListener("input",e=>{state.search=e.target.value;renderProducts()});$("#categoryFilter").onchange=e=>{state.category=e.target.value;renderProducts()};$("#sectionFilter").onchange=e=>{state.section=e.target.value;renderProducts()};$("#brandFilter").onchange=e=>{state.brand=e.target.value;renderProducts()};$("#priceFilter").onchange=e=>{state.price=e.target.value;renderProducts()};$("#sortFilter").onchange=e=>{state.sort=e.target.value;renderProducts()};
 $("#cartBtn").onclick=openCart;$("#wishlistBtn").onclick=openWishlist;$("#accountBtn").onclick=openAccount;$("#heroFitBtn").onclick=openFitCheck;$("#fitBannerBtn").onclick=openFitCheck;$("#menuToggle").onclick=()=>$("#navLinks").classList.toggle("open");$$("[data-nav]").forEach(a=>a.addEventListener("click",()=>$("#navLinks").classList.remove("open")));$$("[data-category]").forEach(a=>a.addEventListener("click",()=>{state.category=a.dataset.category;state.section=a.dataset.section||"";$("#categoryFilter").value=state.category;$("#sectionFilter").value=state.section;renderProducts()}));$("#accountFooter").onclick=e=>{e.preventDefault();openAccount()};$("#newsletterLink").onclick=e=>{e.preventDefault();openNewsletter()};$$("[data-info]").forEach(a=>a.onclick=e=>{e.preventDefault();toast(a.dataset.info)});window.addEventListener("beforeunload",()=>{stopCamera();if(state.photoURL)URL.revokeObjectURL(state.photoURL)});
