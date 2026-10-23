@@ -771,17 +771,28 @@ function brandFits(est,dept){
 }
 function brandFitHTML(est){
  const list=brandFits(est,$("#fitDept").value);if(!list.length)return"";
- return `<div class="result-box" style="background:#fff;border:1px solid var(--line)"><div class="kicker">Brands that should fit you best</div><h3 style="margin-top:6px">Your best-fit brands</h3>${list.map((b,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:${i?"1px solid var(--line)":"0"}"><div><strong style="font-size:15px">${i+1}. ${escapeHTML(b.brand)}</strong><div style="font-size:11px;color:var(--muted)">${escapeHTML(b.p.name)} · size <strong>${escapeHTML(b.size)}</strong> · ${b.d===0?"inside this size's range":"about "+b.d+" cm outside the range"}</div></div><button class="button small" data-bfview="${b.p.id}" data-bfsize="${escapeHTML(b.size)}">${b.d===0?"Perfect fit":"Close fit"} ↗</button></div>`).join("")}<p class="form-note" style="margin:10px 0 0">Ranked using the sample size charts in this demo store, comparing your estimated measurements with each brand's pieces. Real brand charts differ, so confirm on the brand's official chart.</p></div>`;
+ return `<div class="result-box" style="background:#fff;border:1px solid var(--line)"><div class="kicker">Brands that should fit you best</div><h3 style="margin-top:6px">Your best-fit brands</h3>${list.map((b,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:${i?"1px solid var(--line)":"0"}"><div><strong style="font-size:15px">${i+1}. ${escapeHTML(b.brand)}</strong><div style="font-size:11px;color:var(--muted)">${escapeHTML(b.p.name)} · size <strong>${escapeHTML(b.size)}</strong> · ${b.d===0?"inside this size's range":"about "+b.d+" cm outside the range"}</div></div><button class="button small" data-bfview="${b.p.id}" data-bfsize="${escapeHTML(b.size)}">${b.d===0?"Perfect fit":"Close fit"} ↗</button></div>`).join("")}<p class="form-note" style="margin:10px 0 0">Brand suggestions use available size-chart data where compatible rows exist. Photo-based measurements are approximate; confirm against the brand's official chart.</p></div>`;
 }
 function renderFitResult(){
  const p=state.lastFitProduct||products[0],est=state.bodyEst;if(!est)return;
  const useWaist=WAIST_CATS.includes(p.category),measurement=useWaist?est.waist:est.chest,label=useWaist?"Waist":"Chest / bust";
- let chosen=null,best=Infinity;for(const [size,range] of Object.entries(p.chart)){const [lo,hi]=range;const dist=measurement<lo?lo-measurement:measurement>hi?measurement-hi:0;if(dist<best){best=dist;chosen={size,range,dist}}}
+ // A single-image circumference estimate is uncertain. Compare a +/- 6 cm band
+ // against each size range instead of treating the estimate as an exact tape measure.
+ const uncertainty=6, estimateLo=measurement-uncertainty, estimateHi=measurement+uncertainty;
+ let chosen=null,best=-Infinity;
+ for(const [size,range] of Object.entries(p.chart)){
+   const [lo,hi]=range;
+   const overlap=Math.max(0,Math.min(estimateHi,hi)-Math.max(estimateLo,lo));
+   const midpoint=(lo+hi)/2, centerDistance=Math.abs(measurement-midpoint);
+   const score=overlap*100-centerDistance;
+   if(score>best){best=score;chosen={size,range,dist:measurement<lo?lo-measurement:measurement>hi?measurement-hi:0,overlap,centerDistance}}
+ }
+ if(!chosen){const el=$("#fitResult");el.innerHTML='<div class="form-error">No usable size-chart ranges are available for this item. Please try another item or check the brand chart.</div>';return;}
  const within=chosen.dist===0;
- const reason=within?`Your estimated ${label.toLowerCase()} (about ${measurement} cm) falls inside the ${chosen.size} range for this garment.`:`Your estimated ${label.toLowerCase()} (about ${measurement} cm) is closest to ${chosen.size}, about ${chosen.dist} cm outside its range. Check the neighbouring size too.`;
+ const reason=`Your estimated ${label.toLowerCase()} is about ${measurement} cm. Because a single photo cannot measure circumference exactly, we compare an approximate ±${uncertainty} cm band with the size ranges. ${within?`The estimate falls within the ${chosen.size} range.`:`${chosen.size} is the closest available range; the estimate is outside it by about ${Math.round(chosen.dist)} cm.`}`;
  state.lastFitResult={size:chosen.size,product:p.id,measurement};
  const rows=Object.entries(p.chart).map(([s,r])=>`<tr style="${s===chosen.size?"background:#142d5e;color:#fff;font-weight:900":""}"><td style="padding:7px 10px">${escapeHTML(s)}</td><td style="padding:7px 10px">${r[0]}–${r[1]} cm</td></tr>`).join("");
- $("#fitResult").innerHTML=`<div class="result-box"><div class="kicker">Detected from your photo</div><h3>Your suggested size</h3><div class="result-size">${escapeHTML(chosen.size)}</div><p>${escapeHTML(reason)}</p><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;border-radius:10px;overflow:hidden"><thead><tr style="text-align:left;background:#e4ebf8"><th style="padding:7px 10px">Size</th><th style="padding:7px 10px">${label} (cm)</th></tr></thead><tbody>${rows}</tbody></table></div>${brandFitHTML(est)}${est.warn.length?`<div class="disclaimer" style="background:#fff3e0;color:#7a4a00">${est.warn.map(escapeHTML).join("<br>")}</div>`:""}<div class="disclaimer"><strong>This is an estimate, not an exact measurement.</strong> Your size is calculated from body proportions in the photo, assuming an average height for the department chosen (${$("#fitDept").value==="Women"?"160":"172"} cm), so it can be off by a size. Confirm against the brand's official size chart, and consider fabric and cut.</div><button class="button outline full" style="margin-top:12px" id="addSuggestedBtn">View product &amp; choose size</button>`;
+ $("#fitResult").innerHTML=`<div class="result-box"><div class="kicker">Photo-based estimate</div><h3>Your closest size match</h3><div class="result-size">${escapeHTML(chosen.size)}</div><p>${escapeHTML(reason)}</p><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;border-radius:10px;overflow:hidden"><thead><tr style="text-align:left;background:#e4ebf8"><th style="padding:7px 10px">Size</th><th style="padding:7px 10px">${label} (cm)</th></tr></thead><tbody>${rows}</tbody></table></div>${brandFitHTML(est)}${est.warn.length?`<div class="disclaimer" style="background:#fff3e0;color:#7a4a00">${est.warn.map(escapeHTML).join("<br>")}</div>`:""}<div class="disclaimer"><strong>This is an experimental photo-based estimate, not a measured chest circumference.</strong> MediaPipe detects body landmarks; chest size is inferred from shoulder proportions and can be wrong by one or more sizes. The ±6 cm band helps account for uncertainty when ranking sizes, but it does not make the underlying measurement more accurate. The database matcher ignores rows explicitly marked as garment/flat-lay measurements, but chart matching alone cannot make the camera estimate exact. Validate with real tape measurements before relying on this recommendation.</div><button class="button outline full" style="margin-top:12px" id="addSuggestedBtn">View product &amp; choose size</button>`;
  $("#addSuggestedBtn").onclick=()=>{closeModal();openProduct(p.id);setTimeout(()=>{const s=$("#detailSize");if(s)s.value=chosen.size},50)}
  $$("[data-bfview]").forEach(bt=>bt.onclick=()=>{const id=+bt.dataset.bfview,sz=bt.dataset.bfsize;closeModal();openProduct(id);setTimeout(()=>{const x=$("#detailSize");if(x)x.value=sz},50)});
 }
@@ -1497,7 +1508,14 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
     if (d === "women") return r.includes("women") || r === "female" || r === "womens";
     return r.includes("men") || r === "male" || r === "mens" || r.includes("unisex");
   }
+  function wwIsBodyMeasurementRow(row) {
+    // The camera estimates body circumference. Never compare it with garment/flat-lay dimensions.
+    const type = wwNorm(row && row.measurement_type);
+    if (!type) return false; // unknown measurement basis must not be assumed to be body measurements
+    return !/(garment|clothing|product|flat lay|flat measurement|finished garment|actual garment)/.test(type);
+  }
   function wwMetric(row, product) {
+    if (!wwIsBodyMeasurementRow(row)) return null;
     const category = wwNorm(product.category);
     const isBottom = (typeof WAIST_CATS !== "undefined" && WAIST_CATS.includes(product.category)) ||
       /jean|pant|trouser|skirt|short|bottom/.test(category);
@@ -1530,6 +1548,7 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
       const candidates = wwDbRows.filter(row =>
         wwDepartmentMatches(row.department, dept) &&
         wwCategoryMatches(row, product) &&
+        wwIsBodyMeasurementRow(row) &&
         wwMetric(row, product)
       );
       if (!candidates.length) return;
@@ -1704,7 +1723,7 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
     if(!Array.isArray(rows)||!rows.length||typeof products==='undefined'||!Array.isArray(products))return [];
     const selected=(typeof state!=='undefined'&&state.lastFitProduct) || products[0];
     const bottom=isBottom(selected),measure=bottom?est.waist:est.chest;
-    const matching=rows.filter(r=>departmentMatches(r.department,dept)&&categoryMatches(r,selected)&&rangeFor(r,bottom));
+    const matching=rows.filter(r=>departmentMatches(r.department,dept)&&categoryMatches(r,selected)&&wwIsBodyMeasurementRow(r)&&rangeFor(r,bottom));
     const groups=new Map();
     matching.forEach(row=>{
       const brand=String(row.brand_name||'').trim();if(!brand)return;
