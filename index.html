@@ -1472,6 +1472,7 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
         const rows = await response.json();
         if (!Array.isArray(rows)) throw new Error("Unexpected database response");
         wwDbRows = rows;
+        window.wwDbRows = rows;
         wwDbState = "connected";
         wwApplyDatabaseCharts();
         wwSetDbStatus("Database: connected · " + rows.length + " size-chart rows", "#276749");
@@ -1582,6 +1583,147 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
   }
 })();
 
+</script>
+<script>
+/* WEARWISE AUTH + DATABASE-DRIVEN FIT MATCHING */
+(function(){
+  'use strict';
+  const SUPABASE_URL = 'https://fggwdaechbszdqqutksf.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_f6SyqJDAZzreNFJ_3OgtgA_tSoz2Ie5';
+  let authClientPromise = null;
+  function loadSupabaseAuth(){
+    if (window.supabase && window.supabase.createClient) return Promise.resolve(window.supabase);
+    if (authClientPromise) return authClientPromise;
+    authClientPromise = new Promise((resolve,reject)=>{
+      const old = document.querySelector('script[data-ww-supabase-auth]');
+      if (old) { old.addEventListener('load',()=>resolve(window.supabase),{once:true}); old.addEventListener('error',reject,{once:true}); return; }
+      const script=document.createElement('script'); script.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'; script.dataset.wwSupabaseAuth='1';
+      script.onload=()=>window.supabase?resolve(window.supabase):reject(new Error('Supabase Auth library did not initialize'));
+      script.onerror=()=>reject(new Error('Could not load Supabase Auth library')); document.head.appendChild(script);
+    });
+    return authClientPromise;
+  }
+  async function getAuthClient(){ const lib=await loadSupabaseAuth(); if(!window.wwAuthClient) window.wwAuthClient=lib.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}); return window.wwAuthClient; }
+  function gateMessage(message){
+    const el=document.querySelector('#wwGate .wwg-msg');
+    if(el){el.textContent=message;el.className='wwg-msg err';}
+    else if(typeof window.toast==='function') window.toast(message);
+    else console.warn('[Wear Wise]',message);
+  }
+  function finishGoogleSignIn(user){
+    const name=user.user_metadata?.full_name || user.user_metadata?.name || (user.email||'Wear Wise shopper').split('@')[0];
+    const sessionUser={name,email:user.email||'',provider:'google',userId:user.id};
+    try{sessionStorage.setItem('wwSession',JSON.stringify(sessionUser));}catch(e){}
+    const gate=document.getElementById('wwGate'); if(gate)gate.style.display='none';
+    document.documentElement.classList.remove('wwg-lock');
+    document.querySelectorAll('body > *').forEach(n=>{if(n!==gate&&n.tagName!=='SCRIPT')n.removeAttribute('inert')});
+    try{ if(typeof state!=='undefined'){state.user={name,email:user.email||'',provider:'google',id:user.id,demo:false};} }catch(e){}
+    try{ if(typeof updateAccountButton==='function')updateAccountButton(); }catch(e){}
+  }
+  async function startGoogleOAuth(){
+    try{
+      const client=await getAuthClient();
+      const redirectTo=window.location.origin+window.location.pathname;
+      const {error}=await client.auth.signInWithOAuth({provider:'google',options:{redirectTo,queryParams:{prompt:'select_account'}}});
+      if(error)throw error;
+    }catch(err){console.error('[Wear Wise] Google OAuth error:',err);gateMessage('Google sign-in is not configured yet. Check the Supabase Google provider settings and redirect URL.');}
+  }
+  // Intercept only the Google button before the old demo handler; keep the existing visual design.
+  document.addEventListener('click',function(event){
+    const button=event.target.closest('#wwGate [data-soc]'); if(!button)return;
+    const provider=button.dataset.soc;
+    if(provider==='google'){event.preventDefault();event.stopImmediatePropagation();startGoogleOAuth();}
+    else if(provider==='microsoft'){event.preventDefault();event.stopImmediatePropagation();gateMessage('Microsoft sign-in is not enabled yet. Please use Google sign-in.');}
+  },true);
+  async function restoreGoogleSession(){
+    try{
+      const client=await getAuthClient();
+      const {data,error}=await client.auth.getSession();
+      if(error)throw error;
+      if(data.session?.user)finishGoogleSignIn(data.session.user);
+      else { try { const old=JSON.parse(sessionStorage.getItem('wwSession')||'null'); if(old && old.demo){sessionStorage.removeItem('wwSession');} } catch(e){} const gate=document.getElementById('wwGate'); if(gate){gate.style.display='';document.documentElement.classList.add('wwg-lock');document.querySelectorAll('body > *').forEach(n=>{if(n!==gate&&n.tagName!=='SCRIPT')n.setAttribute('inert','')});} }
+      client.auth.onAuthStateChange((_event,session)=>{if(session?.user)finishGoogleSignIn(session.user);});
+    }catch(err){console.warn('[Wear Wise] Could not restore auth session:',err);}
+  }
+  restoreGoogleSession();
+
+  // Add an optional real-height calibration field inside Fit Check only.
+  const previousOpenFitCheck=window.openFitCheck;
+  if(typeof previousOpenFitCheck==='function'){
+    window.openFitCheck=function(){
+      const result=previousOpenFitCheck.apply(this,arguments);
+      const dept=document.getElementById('fitDept');
+      if(dept && !document.getElementById('wwHeightCalibration')){
+        const field=document.createElement('div'); field.className='field'; field.innerHTML='<label for="wwHeightCalibration">Your height (cm)</label><input id="wwHeightCalibration" type="number" min="120" max="230" step="1" value="170" inputmode="numeric"><p class="form-note">Use your actual height to improve image scale. Photo-based circumference estimates are still approximate.</p>';
+        dept.closest('.field').insertAdjacentElement('afterend',field);
+      }
+      return result;
+    };
+  }
+  // Make the scale use the entered height instead of an assumed population average.
+  if(typeof window.estimateBody==='function'){
+    const previousEstimateBody=window.estimateBody;
+    window.estimateBody=function(kp,dept){
+      const heightInput=document.getElementById('wwHeightCalibration');
+      const entered=heightInput?Number(heightInput.value):NaN;
+      if(heightInput && (!Number.isFinite(entered)||entered<120||entered>230)) return {error:'Enter your actual height between 120 and 230 cm before detecting your size.'};
+      const est=previousEstimateBody.apply(this,arguments);
+      if(est && !est.error && Number.isFinite(entered)){
+        const assumed=dept==='Women'?160:172;
+        const ratio=entered/assumed;
+        est.chest=Math.round(est.chest*ratio);
+        est.waist=Math.round(est.waist*ratio);
+        est.warn=Array.isArray(est.warn)?est.warn:[];
+        est.warn.push('Height-calibrated from your input. Chest and waist are still estimates from a single 2D image, not tape measurements.');
+      }
+      return est;
+    };
+  }
+
+  // Rank brands using the actual Supabase chart rows for the selected garment category.
+  function norm(v){return String(v??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+  function departmentMatches(rowDept,dept){const r=norm(rowDept);return dept==='Women'?(r.includes('women')||r==='female'||r==='womens'):(r.includes('men')||r==='male'||r==='mens'||r.includes('unisex'));}
+  function isBottom(product){return (Array.isArray(window.WAIST_CATS)&&window.WAIST_CATS.includes(product.category))||/jean|pant|trouser|skirt|short|bottom/.test(norm(product.category));}
+  function categoryMatches(row,product){
+    const c=norm(product.category),g=norm(row.garment_category),t=norm(row.garment_type),v=g+' '+t;
+    if(/shirt|t shirt|tee|top|blouse/.test(c))return /shirt|tee|top|blouse|t shirt/.test(v);
+    if(/hoodie|sweatshirt|sweater/.test(c))return /hoodie|sweatshirt|sweater|top/.test(v);
+    if(/jean|pant|trouser/.test(c))return /jean|pant|trouser|bottom/.test(v);
+    if(/skirt/.test(c))return /skirt|bottom/.test(v);
+    if(/short/.test(c))return /short|bottom/.test(v);
+    return !!c&&(g===c||t===c||g.includes(c)||t.includes(c)||c.includes(g)||c.includes(t));
+  }
+  function rangeFor(row,bottom){
+    let lo,hi;
+    if(bottom){lo=Number(row.waist_min_cm);hi=Number(row.waist_max_cm);if(!(lo>0&&hi>=lo)){const inches=Number(row.jeans_waist_in);if(inches>0){lo=inches*2.54;hi=lo+5.08;}}}
+    else{lo=Number(row.chest_bust_min_cm);hi=Number(row.chest_bust_max_cm);}
+    return lo>0&&hi>=lo&&Number.isFinite(lo)&&Number.isFinite(hi)?[lo,hi]:null;
+  }
+  window.wwDatabaseBrandFits=function(est,dept){
+    const rows=window.wwDbRows;
+    if(!Array.isArray(rows)||!rows.length||typeof products==='undefined'||!Array.isArray(products))return [];
+    const selected=(typeof state!=='undefined'&&state.lastFitProduct) || products[0];
+    const bottom=isBottom(selected),measure=bottom?est.waist:est.chest;
+    const matching=rows.filter(r=>departmentMatches(r.department,dept)&&categoryMatches(r,selected)&&rangeFor(r,bottom));
+    const groups=new Map();
+    matching.forEach(row=>{
+      const brand=String(row.brand_name||'').trim();if(!brand)return;
+      const range=rangeFor(row,bottom);const label=String(row.displayed_size_label||row.eu_size||row.us_size||row.uk_size||row.au_size||'').trim();if(!label)return;
+      const d=measure<range[0]?range[0]-measure:measure>range[1]?measure-range[1]:0;
+      const mid=Math.abs(measure-(range[0]+range[1])/2);const score=d*100+mid;
+      const current=groups.get(brand);
+      if(!current||score<current.score)groups.set(brand,{brand,size:label,d,score,range,row});
+    });
+    return Array.from(groups.values()).sort((a,b)=>a.score-b.score).slice(0,6);
+  };
+  const oldBrandFitHTML=window.brandFitHTML;
+  window.brandFitHTML=function(est){
+    const dept=document.getElementById('fitDept')?.value||'Women';
+    const list=window.wwDatabaseBrandFits(est,dept);
+    if(!list.length){if(Array.isArray(window.wwDbRows)&&window.wwDbRows.length)return '<div class="disclaimer">No compatible brand size-chart rows were found in the database for this garment. Choose another garment category or add the brand chart before relying on a recommendation.</div>';return oldBrandFitHTML?oldBrandFitHTML(est):'';}
+    return '<div class="result-box" style="background:#fff;border:1px solid var(--line)"><div class="kicker">Database-matched brands</div><h3 style="margin-top:6px">Closest size-chart matches</h3>'+list.map((b,i)=>'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:'+(i?'1px solid var(--line)':'0')+'"><div><strong style="font-size:15px">'+(i+1)+'. '+String(b.brand).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</strong><div style="font-size:11px;color:var(--muted)">Size <strong>'+String(b.size).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</strong> · '+(b.d===0?'measurement falls within chart range':'about '+b.d.toFixed(1)+' cm outside chart range')+'</div></div><span class="form-note">'+(b.d===0?'Chart match':'Closest match')+'</span></div>').join('')+'<p class="form-note" style="margin:10px 0 0">Matched against the available Supabase brand size-chart rows for this garment type. Results depend on chart coverage and your estimated body measurements.</p></div>';
+  };
+})();
 </script>
 </body>
 </html>
