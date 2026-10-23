@@ -651,7 +651,7 @@ html.wwg-lock{overflow:hidden}
 </div>
 
 <div id="overlayRoot"></div><div id="modalRoot"></div><div class="toast-area" id="toastArea" aria-live="polite"></div>
-<input id="photoFileInput" type="file" accept="image/*" capture="environment" class="hidden">
+<input id="photoFileInput" type="file" accept="image/*" class="hidden">
 <script>
 "use strict";
 const $ = (s,root=document)=>root.querySelector(s);
@@ -720,10 +720,10 @@ function fitDeptOf(p){return p&&p.sec==="Women"?"Women":"Men"}
 function fitOptions(dept,selId){return products.filter(x=>fitDeptOf(x)===dept).map(x=>`<option value="${x.id}" ${x.id===selId?"selected":""}>${escapeHTML(x.name)} — ${escapeHTML(x.brand)}</option>`).join("")}
 const UPLOAD_IDLE=`<div class="big-icon">▧</div><strong>Take or upload a full-body photo</strong><p class="form-note">Stand 2–3 m from the camera with your whole body in frame, facing forward, arms slightly away from your body, fitted clothing, good light. Your size is detected automatically.</p><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload photo</button></div>`;
 function openFitCheck(){closeDrawer();stopCamera();if(!state.lastFitProduct)state.lastFitProduct=products[0];const p=state.lastFitProduct,dept=fitDeptOf(p);state.photoURL=null;state.photoFile=null;state.lastFitResult=null;state.bodyEst=null;detectToken++;
-openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div class="fit-layout"><aside class="fit-aside"><div class="eyebrow">WEARWISE / Fit Check</div><h2>FIND YOUR<br>ACTUAL<br><span style="color:var(--lime)">FIT.</span></h2><p>Choose your department, then take or upload a full-body photo. WEARWISE detects your body outline in the browser and matches your estimated measurements to the size chart automatically.</p><div style="margin-top:25px;border-top:1px solid #30342b;padding-top:18px;font-size:10px;letter-spacing:.1em;color:#b7bbae">01 DEPARTMENT · 02 PHOTO · 03 YOUR SIZE</div></aside><div class="fit-main"><div class="kicker">01 / Choose department</div><div class="field"><label for="fitDept">Department</label><select id="fitDept"><option value="Women" ${dept==="Women"?"selected":""}>Women</option><option value="Men" ${dept==="Men"?"selected":""}>Men &amp; unisex</option></select></div><div class="field"><label>02 / Photo</label><div class="upload-box" id="uploadBox"><div id="uploadContents">${UPLOAD_IDLE}</div></div><div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline></video><div class="upload-actions"><button class="button small" id="capturePhoto">Capture &amp; detect size</button><button class="button outline small" id="stopCameraBtn">Stop camera</button></div></div></div><button class="button dark full" id="analyzeBtn">Detect my size ↗</button><div id="fitResult"></div></div></div>`);
+openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div class="fit-layout"><aside class="fit-aside"><div class="eyebrow">WEARWISE / Fit Check</div><h2>FIND YOUR<br>ACTUAL<br><span style="color:var(--lime)">FIT.</span></h2><p>Choose your department, then take or upload a full-body photo. WEARWISE detects your body outline in the browser and matches your estimated measurements to the size chart automatically.</p><div style="margin-top:25px;border-top:1px solid #30342b;padding-top:18px;font-size:10px;letter-spacing:.1em;color:#b7bbae">01 DEPARTMENT · 02 PHOTO · 03 YOUR SIZE</div></aside><div class="fit-main"><div class="kicker">01 / Choose department</div><div class="field"><label for="fitDept">Department</label><select id="fitDept"><option value="Women" ${dept==="Women"?"selected":""}>Women</option><option value="Men" ${dept==="Men"?"selected":""}>Men &amp; unisex</option></select></div><div class="field"><label for="fitHeight">Your height (cm) — used to scale the photo</label><input id="fitHeight" type="number" inputmode="decimal" min="120" max="220" step="0.5" placeholder="e.g. 168" value="${state.height||""}"></div><div class="field"><label for="fitWeight">Weight (kg) — optional, improves accuracy</label><input id="fitWeight" type="number" inputmode="decimal" placeholder="e.g. 62"></div><div class="field"><label>Optional: your tape measurements (cm) — most accurate</label><div style="display:flex;gap:8px"><input id="fitChest" type="number" inputmode="decimal" placeholder="Chest / bust"><input id="fitWaist" type="number" inputmode="decimal" placeholder="Waist"></div></div><div class="field"><label>02 / Photo</label><div class="upload-box" id="uploadBox"><div id="uploadContents">${UPLOAD_IDLE}</div></div><div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline></video><div class="upload-actions"><button class="button small" id="timerPhoto">Start 10 s timer</button><button class="button small" id="capturePhoto">Capture now</button><button class="button outline small" id="flipCamera">Flip camera</button><button class="button outline small" id="stopCameraBtn">Stop camera</button></div></div></div><button class="button dark full" id="analyzeBtn">Detect my size ↗</button><div id="fitResult"></div></div></div>`);
 $("#fitDept").onchange=()=>{const d=$("#fitDept").value;const list=products.filter(x=>fitDeptOf(x)===d);state.lastFitProduct=list[0];state.bodyEst=null;$("#fitResult").innerHTML="";if(state.photoURL)runDetection()};
-$("#choosePhoto").onclick=()=>$("#photoFileInput").click();$("#startCamera").onclick=startCamera;$("#capturePhoto").onclick=capturePhoto;$("#stopCameraBtn").onclick=stopCamera;
-$("#analyzeBtn").onclick=()=>{if(!state.photoURL){$("#fitResult").innerHTML='<div class="form-error">Take or upload a full-body photo first, then your size is detected automatically.</div>';return}runDetection()};
+$("#choosePhoto").onclick=()=>$("#photoFileInput").click();$("#startCamera").onclick=startCamera;$("#capturePhoto").onclick=capturePhoto;$("#timerPhoto").onclick=timerCapture;$("#flipCamera").onclick=flipCamera;$("#stopCameraBtn").onclick=stopCamera;
+$("#analyzeBtn").onclick=()=>{if(!state.photoURL){const c=numVal("#fitChest",60,170),w=numVal("#fitWaist",50,160);if(c&&w){state.bodyEst={chest:Math.round(c),waist:Math.round(w),warn:[],tape:{chest:true,waist:true}};renderFitResult();return}$("#fitResult").innerHTML='<div class="form-error">Take or upload a full-body photo, or enter both your tape-measured chest and waist.</div>';return}runDetection()};
 }
 function showPhoto(url){const contents=$("#uploadContents");if(!contents)return;contents.innerHTML=`<img referrerpolicy="no-referrer" class="preview-img" src="${url}" alt="Selected photo preview"><strong>Photo ready</strong><div class="upload-actions"><button class="button small" id="replacePhoto">Replace photo</button><button class="button outline small" id="removePhoto">Remove photo</button></div>`;$("#replacePhoto").onclick=()=>$("#photoFileInput").click();$("#removePhoto").onclick=()=>{state.photoURL=null;state.photoFile=null;state.bodyEst=null;detectToken++;contents.innerHTML=UPLOAD_IDLE;$("#choosePhoto").onclick=()=>$("#photoFileInput").click();$("#startCamera").onclick=startCamera;$("#fitResult").innerHTML=""}}
 $("#photoFileInput").addEventListener("change",e=>{const file=e.target.files&&e.target.files[0];if(!file)return;if(!file.type.startsWith("image/")){toast("Please choose an image file");return}if(file.size>8*1024*1024){toast("Image must be smaller than 8 MB");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=file;state.photoURL=URL.createObjectURL(file);showPhoto(state.photoURL);runDetection();e.target.value=""});
@@ -733,29 +733,33 @@ function getDetector(){if(!poseDetectorP)poseDetectorP=(async()=>{if(!window.tf)
 function loadImg(url){return new Promise((res,rej)=>{const im=new Image();im.onload=()=>res(im);im.onerror=rej;im.src=url})}
 const D=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
 const MID=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
-function estimateBody(kp,dept){
+function numVal(id,lo,hi){const el=$(id),v=el?parseFloat(el.value):NaN;return v>=lo&&v<=hi?v:null}
+function readHeight(){const v=numVal("#fitHeight",120,220);if(v)state.height=v;return v}
+function applyTape(est){if(est.error)return est;const c=numVal("#fitChest",60,170),w=numVal("#fitWaist",50,160);est.tape={};if(c){est.chest=Math.round(c);est.tape.chest=true}if(w){est.waist=Math.round(w);est.tape.waist=true}return est}
+function estimateBody(kp,dept,H){
  const k=n=>kp.find(p=>p.name===n),ok=p=>p&&(p.score===undefined||p.score>=0.3);
  const ls=k("left_shoulder"),rs=k("right_shoulder"),lh=k("left_hip"),rh=k("right_hip"),nose=k("nose"),la=k("left_ankle"),ra=k("right_ankle");
  if(!ok(ls)||!ok(rs)||!ok(lh)||!ok(rh))return{error:"We couldn't see your shoulders and hips clearly. Stand facing the camera with your full body in frame and try again."};
- const torso=D(MID(ls,rs),MID(lh,rh));if(torso<10)return{error:"We couldn't read your body outline. Try a clearer, well-lit photo."};
- let hpx,full=false;
- if(ok(nose)&&ok(la)&&ok(ra)){hpx=D(nose,MID(la,ra))/0.90;full=true}else hpx=torso/0.29;
- const assumed=dept==="Women"?160:172,cm=assumed/hpx;
- const shoulderCm=D(ls,rs)*cm,hipCm=D(lh,rh)*cm;
- const chest=Math.round(Math.min(Math.max(shoulderCm*(dept==="Women"?2.7:2.6),70),140));
- const waist=Math.round(Math.min(Math.max(hipCm*(dept==="Women"?2.5:2.7),55),130));
- const warn=[];if(!full)warn.push("Your full body wasn't visible, so this estimate is less reliable. Step back so head to feet are in frame.");
+ const sm=MID(ls,rs),hm=MID(lh,rh),torso=D(sm,hm);if(torso<10)return{error:"We couldn't read your body outline. Try a clearer, well-lit photo."};
+ let spx,full=false;
+ if(ok(nose)&&ok(la)&&ok(ra)){spx=D(nose,MID(la,ra))/0.89;full=true}else spx=torso/0.288;
+ const cm=H/spx,shoulderCm=D(ls,rs)*cm,hipCm=D(lh,rh)*cm,W=dept==="Women";
+ const chest=Math.round(Math.min(Math.max(shoulderCm*(W?2.8:2.7),70),140));
+ const waist=Math.round(Math.min(Math.max(hipCm*(W?2.5:2.7),55),130));
+ const warn=[];if(!full)warn.push("Your full body wasn't visible, so the scale is less reliable. Step back so head to feet are in frame.");
  if(D(ls,rs)/torso<0.5)warn.push("You may be turned sideways. Face the camera straight on for a better result.");
+ const lean=Math.abs(Math.atan2(hm.x-sm.x,hm.y-sm.y))*180/Math.PI;if(lean>10)warn.push("You seem to be leaning or the camera is tilted. Stand straight and hold the phone level.");
+ const tilt=Math.abs(Math.atan2(rs.y-ls.y,rs.x-ls.x))*180/Math.PI;if(Math.min(tilt,180-tilt)>8)warn.push("Your shoulders look uneven in the photo. Keep the camera level and shoulders relaxed.");
  return{chest,waist,warn};
 }
 async function runDetection(){
- const box=$("#fitResult");if(!box||!state.photoURL)return;const tok=++detectToken;
+ const box=$("#fitResult");if(!box||!state.photoURL)return;const tok=++detectToken;if(!readHeight()){box.innerHTML='<div class="form-error">Enter your height (120–220 cm) so the photo can be scaled, then press “Detect my size”.</div>';return}
  box.innerHTML='<div class="result-box" style="text-align:center"><div class="wwg-spin" style="margin:6px auto 14px;width:40px;height:40px;border:4px solid #d5def0;border-top-color:#142d5e;border-radius:50%;animation:wwg-s .8s linear infinite"></div><strong>Detecting your size…</strong><p>Loading the body-detection model (first time takes a few seconds).</p></div>';
  try{
   const det=await getDetector(),img=await loadImg(state.photoURL),poses=await det.estimatePoses(img);
   if(tok!==detectToken)return;
   if(!poses.length){box.innerHTML='<div class="form-error">No person detected. Use a full-body photo in good light and try again.</div>';return}
-  const dept=$("#fitDept").value,est=estimateBody(poses[0].keypoints,dept);
+  const dept=$("#fitDept").value,est=applyTape(estimateBody(poses[0].keypoints,dept,readHeight()));
   if(est.error){box.innerHTML='<div class="form-error">'+escapeHTML(est.error)+'</div>';return}
   state.bodyEst=est;renderFitResult();
  }catch(err){if(tok!==detectToken)return;box.innerHTML='<div class="form-error">Size detection could not run because the body-detection model failed to load. Check your internet connection and try again. No size was guessed.</div>'}
@@ -778,7 +782,7 @@ function renderFitResult(){
  const useWaist=WAIST_CATS.includes(p.category),measurement=useWaist?est.waist:est.chest,label=useWaist?"Waist":"Chest / bust";
  // A single-image circumference estimate is uncertain. Compare a +/- 6 cm band
  // against each size range instead of treating the estimate as an exact tape measure.
- const uncertainty=6, estimateLo=measurement-uncertainty, estimateHi=measurement+uncertainty;
+ const uncertainty=(est.tape&&est.tape[useWaist?"waist":"chest"])?1.5:(est.unc||6), estimateLo=measurement-uncertainty, estimateHi=measurement+uncertainty;
  let chosen=null,best=-Infinity;
  for(const [size,range] of Object.entries(p.chart)){
    const [lo,hi]=range;
@@ -789,15 +793,23 @@ function renderFitResult(){
  }
  if(!chosen){const el=$("#fitResult");el.innerHTML='<div class="form-error">No usable size-chart ranges are available for this item. Please try another item or check the brand chart.</div>';return;}
  const within=chosen.dist===0;
- const reason=`Your estimated ${label.toLowerCase()} is about ${measurement} cm. Because a single photo cannot measure circumference exactly, we compare an approximate ±${uncertainty} cm band with the size ranges. ${within?`The estimate falls within the ${chosen.size} range.`:`${chosen.size} is the closest available range; the estimate is outside it by about ${Math.round(chosen.dist)} cm.`}`;
+ const reason=`Your estimated ${label.toLowerCase()} is about ${measurement} cm. ${(est.tape&&est.tape[useWaist?"waist":"chest"])?"Based on your tape measurement, ":"Because a single photo cannot measure circumference exactly, "}we compare an approximate ±${uncertainty} cm band with the size ranges. ${within?`The estimate falls within the ${chosen.size} range.`:`${chosen.size} is the closest available range; the estimate is outside it by about ${Math.round(chosen.dist)} cm.`}`;
  state.lastFitResult={size:chosen.size,product:p.id,measurement};
  const rows=Object.entries(p.chart).map(([s,r])=>`<tr style="${s===chosen.size?"background:#142d5e;color:#fff;font-weight:900":""}"><td style="padding:7px 10px">${escapeHTML(s)}</td><td style="padding:7px 10px">${r[0]}–${r[1]} cm</td></tr>`).join("");
- $("#fitResult").innerHTML=`<div class="result-box"><div class="kicker">Photo-based estimate</div><h3>Your closest size match</h3><div class="result-size">${escapeHTML(chosen.size)}</div><p>${escapeHTML(reason)}</p><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;border-radius:10px;overflow:hidden"><thead><tr style="text-align:left;background:#e4ebf8"><th style="padding:7px 10px">Size</th><th style="padding:7px 10px">${label} (cm)</th></tr></thead><tbody>${rows}</tbody></table></div>${brandFitHTML(est)}${est.warn.length?`<div class="disclaimer" style="background:#fff3e0;color:#7a4a00">${est.warn.map(escapeHTML).join("<br>")}</div>`:""}<div class="disclaimer"><strong>This is an experimental photo-based estimate, not a measured chest circumference.</strong> MediaPipe detects body landmarks; chest size is inferred from shoulder proportions and can be wrong by one or more sizes. The ±6 cm band helps account for uncertainty when ranking sizes, but it does not make the underlying measurement more accurate. The database matcher ignores rows explicitly marked as garment/flat-lay measurements, but chart matching alone cannot make the camera estimate exact. Validate with real tape measurements before relying on this recommendation.</div><button class="button outline full" style="margin-top:12px" id="addSuggestedBtn">View product &amp; choose size</button>`;
+ $("#fitResult").innerHTML=`<div class="result-box"><div class="kicker">${est.tape&&est.tape.chest&&est.tape.waist?"Based on your tape measurements":"Photo-based estimate"}</div><h3>Your closest size match</h3><div class="result-size">${escapeHTML(chosen.size)}</div><p>${escapeHTML(reason)}</p><table style="width:100%;border-collapse:collapse;font-size:12px;margin-top:6px;background:#fff;border-radius:10px;overflow:hidden"><thead><tr style="text-align:left;background:#e4ebf8"><th style="padding:7px 10px">Size</th><th style="padding:7px 10px">${label} (cm)</th></tr></thead><tbody>${rows}</tbody></table></div>${brandFitHTML(est)}${est.warn.length?`<div class="disclaimer" style="background:#fff3e0;color:#7a4a00">${est.warn.map(escapeHTML).join("<br>")}</div>`:""}<div class="disclaimer"><strong>This is an experimental photo-based estimate, not a measured chest circumference.</strong> ${est.method?"Your body outline is measured from the photo, scaled by your height, and converted to circumference with an elliptical body model, so it can still differ from a tape measure by a few cm.":"Body landmarks (MoveNet) are scaled using the height you entered and chest/waist are inferred from shoulder and hip proportions, so they can be off by about ±5 cm."} For the most reliable result, enter your tape-measured chest and waist. The ±6 cm band helps account for uncertainty when ranking sizes, but it does not make the underlying measurement more accurate. The database matcher ignores rows explicitly marked as garment/flat-lay measurements, but chart matching alone cannot make the camera estimate exact. Validate with real tape measurements before relying on this recommendation.</div><button class="button outline full" style="margin-top:12px" id="addSuggestedBtn">View product &amp; choose size</button>`;
  $("#addSuggestedBtn").onclick=()=>{closeModal();openProduct(p.id);setTimeout(()=>{const s=$("#detailSize");if(s)s.value=chosen.size},50)}
  $$("[data-bfview]").forEach(bt=>bt.onclick=()=>{const id=+bt.dataset.bfview,sz=bt.dataset.bfsize;closeModal();openProduct(id);setTimeout(()=>{const x=$("#detailSize");if(x)x.value=sz},50)});
 }
-async function startCamera(){const controls=$("#cameraControls");if(!controls)return;if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast("Camera isn't supported here. Use photo upload instead.");return}try{state.cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"user"},audio:false});const video=$("#cameraVideo");video.srcObject=state.cameraStream;controls.classList.remove("hidden");getDetector().catch(()=>{})}catch(err){toast("Camera access denied or unavailable. Allow permission or upload a photo.")}}
-function stopCamera(){if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>t.stop());state.cameraStream=null}const video=$("#cameraVideo");if(video)video.srcObject=null;const controls=$("#cameraControls");if(controls)controls.classList.add("hidden")}
+let camFacing="user",camTimer=null;
+async function startCamera(facing){if(typeof facing!=="string")facing=camFacing;const controls=$("#cameraControls");if(!controls)return;
+ if(!window.isSecureContext||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast("Camera needs HTTPS (or localhost) and a supported browser. Use photo upload instead.");return}
+ if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>t.stop());state.cameraStream=null}
+ try{state.cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facing},width:{ideal:1280},height:{ideal:1280}},audio:false});camFacing=facing;
+  const v=$("#cameraVideo");v.srcObject=state.cameraStream;v.muted=true;v.style.transform=facing==="user"?"scaleX(-1)":"";await v.play().catch(()=>{});controls.classList.remove("hidden");toast("Camera on. Step back 2–3 m, full body in frame, arms slightly away, then use the 10 s timer.");getDetector().catch(()=>{})}
+ catch(err){const n=err&&err.name;toast(n==="NotAllowedError"?"Camera permission denied. Allow it in your browser settings or upload a photo.":n==="NotFoundError"?"No camera found. Upload a photo instead.":"Camera could not start. Close other apps using it, or upload a photo.")}}
+function stopCamera(){if(camTimer){clearInterval(camTimer);camTimer=null}if(state.cameraStream){state.cameraStream.getTracks().forEach(t=>t.stop());state.cameraStream=null}const video=$("#cameraVideo");if(video)video.srcObject=null;const controls=$("#cameraControls");if(controls)controls.classList.add("hidden")}
+function flipCamera(){startCamera(camFacing==="user"?"environment":"user")}
+function timerCapture(){const b=$("#timerPhoto");if(!b)return;if(camTimer){clearInterval(camTimer);camTimer=null;b.textContent="Start 10 s timer";return}let n=10;const say=()=>b.textContent="Capturing in "+n+"… (tap to cancel)";say();camTimer=setInterval(()=>{n--;if(n<=0){clearInterval(camTimer);camTimer=null;b.textContent="Start 10 s timer";capturePhoto()}else say()},1000)}
 function capturePhoto(){const video=$("#cameraVideo");if(!video||!video.videoWidth){toast("Camera is still starting. Try again in a moment.");return}const canvas=document.createElement("canvas");canvas.width=video.videoWidth;canvas.height=video.videoHeight;canvas.getContext("2d").drawImage(video,0,0);canvas.toBlob(blob=>{if(!blob){toast("Could not capture photo");return}if(state.photoURL)URL.revokeObjectURL(state.photoURL);state.photoFile=new File([blob],"WEARWISE-camera-capture.jpg",{type:"image/jpeg"});state.photoURL=URL.createObjectURL(blob);stopCamera();showPhoto(state.photoURL);runDetection()},"image/jpeg",.9)}
 function openNewsletter(){openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div style="padding:30px"><div class="kicker">WEARWISE / Stay in the loop</div><h2 style="font-size:36px;letter-spacing:-.07em">GOOD THINGS<br>INCOMING.</h2><p class="muted">This newsletter is a frontend demo. No email will be sent or saved.</p><form id="newsletterForm"><div class="field"><label for="newsEmail">Email address</label><input type="email" id="newsEmail" required placeholder="you@example.com"></div><button class="button dark full">Join the list ↗</button></form></div>`,true);$("#newsletterForm").onsubmit=e=>{e.preventDefault();closeModal();toast("Demo signup complete — connect an email service to collect subscriptions.")}}
 $("#searchInput").addEventListener("input",e=>{state.search=e.target.value;renderProducts()});$("#categoryFilter").onchange=e=>{state.category=e.target.value;renderProducts()};$("#sectionFilter").onchange=e=>{state.section=e.target.value;renderProducts()};$("#brandFilter").onchange=e=>{state.brand=e.target.value;renderProducts()};$("#priceFilter").onchange=e=>{state.price=e.target.value;renderProducts()};$("#sortFilter").onchange=e=>{state.sort=e.target.value;renderProducts()};
@@ -1514,6 +1526,7 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
     if (!type) return false; // unknown measurement basis must not be assumed to be body measurements
     return !/(garment|clothing|product|flat lay|flat measurement|finished garment|actual garment)/.test(type);
   }
+  window.wwIsBodyMeasurementRow = wwIsBodyMeasurementRow;
   function wwMetric(row, product) {
     if (!wwIsBodyMeasurementRow(row)) return null;
     const category = wwNorm(product.category);
@@ -1666,39 +1679,6 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
   }
   restoreGoogleSession();
 
-  // Add an optional real-height calibration field inside Fit Check only.
-  const previousOpenFitCheck=window.openFitCheck;
-  if(typeof previousOpenFitCheck==='function'){
-    window.openFitCheck=function(){
-      const result=previousOpenFitCheck.apply(this,arguments);
-      const dept=document.getElementById('fitDept');
-      if(dept && !document.getElementById('wwHeightCalibration')){
-        const field=document.createElement('div'); field.className='field'; field.innerHTML='<label for="wwHeightCalibration">Your height (cm)</label><input id="wwHeightCalibration" type="number" min="120" max="230" step="1" value="170" inputmode="numeric"><p class="form-note">Use your actual height to improve image scale. Photo-based circumference estimates are still approximate.</p>';
-        dept.closest('.field').insertAdjacentElement('afterend',field);
-      }
-      return result;
-    };
-  }
-  // Make the scale use the entered height instead of an assumed population average.
-  if(typeof window.estimateBody==='function'){
-    const previousEstimateBody=window.estimateBody;
-    window.estimateBody=function(kp,dept){
-      const heightInput=document.getElementById('wwHeightCalibration');
-      const entered=heightInput?Number(heightInput.value):NaN;
-      if(heightInput && (!Number.isFinite(entered)||entered<120||entered>230)) return {error:'Enter your actual height between 120 and 230 cm before detecting your size.'};
-      const est=previousEstimateBody.apply(this,arguments);
-      if(est && !est.error && Number.isFinite(entered)){
-        const assumed=dept==='Women'?160:172;
-        const ratio=entered/assumed;
-        est.chest=Math.round(est.chest*ratio);
-        est.waist=Math.round(est.waist*ratio);
-        est.warn=Array.isArray(est.warn)?est.warn:[];
-        est.warn.push('Height-calibrated from your input. Chest and waist are still estimates from a single 2D image, not tape measurements.');
-      }
-      return est;
-    };
-  }
-
   // Rank brands using the actual Supabase chart rows for the selected garment category.
   function norm(v){return String(v??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
   function departmentMatches(rowDept,dept){const r=norm(rowDept);return dept==='Women'?(r.includes('women')||r==='female'||r==='womens'):(r.includes('men')||r==='male'||r==='mens'||r.includes('unisex'));}
@@ -1723,7 +1703,7 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
     if(!Array.isArray(rows)||!rows.length||typeof products==='undefined'||!Array.isArray(products))return [];
     const selected=(typeof state!=='undefined'&&state.lastFitProduct) || products[0];
     const bottom=isBottom(selected),measure=bottom?est.waist:est.chest;
-    const matching=rows.filter(r=>departmentMatches(r.department,dept)&&categoryMatches(r,selected)&&wwIsBodyMeasurementRow(r)&&rangeFor(r,bottom));
+    const matching=rows.filter(r=>departmentMatches(r.department,dept)&&categoryMatches(r,selected)&&(window.wwIsBodyMeasurementRow?window.wwIsBodyMeasurementRow(r):true)&&rangeFor(r,bottom));
     const groups=new Map();
     matching.forEach(row=>{
       const brand=String(row.brand_name||'').trim();if(!brand)return;
@@ -1742,6 +1722,90 @@ window.renderFitResult=function(){_rfr.apply(this,arguments);const box=document.
     if(!list.length){if(Array.isArray(window.wwDbRows)&&window.wwDbRows.length)return '<div class="disclaimer">No compatible brand size-chart rows were found in the database for this garment. Choose another garment category or add the brand chart before relying on a recommendation.</div>';return oldBrandFitHTML?oldBrandFitHTML(est):'';}
     return '<div class="result-box" style="background:#fff;border:1px solid var(--line)"><div class="kicker">Database-matched brands</div><h3 style="margin-top:6px">Closest size-chart matches</h3>'+list.map((b,i)=>'<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-top:'+(i?'1px solid var(--line)':'0')+'"><div><strong style="font-size:15px">'+(i+1)+'. '+String(b.brand).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</strong><div style="font-size:11px;color:var(--muted)">Size <strong>'+String(b.size).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</strong> · '+(b.d===0?'measurement falls within chart range':'about '+b.d.toFixed(1)+' cm outside chart range')+'</div></div><span class="form-note">'+(b.d===0?'Chart match':'Closest match')+'</span></div>').join('')+'<p class="form-note" style="margin:10px 0 0">Matched against the available Supabase brand size-chart rows for this garment type. Results depend on chart coverage and your estimated body measurements.</p></div>';
   };
+})();
+</script>
+<style>.wwscan{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}.wwscan-grid{display:grid;grid-template-columns:minmax(0,200px) 1fr;gap:16px;margin-top:10px;align-items:start}.wwscan canvas{width:100%;height:auto;border-radius:12px;background:#eee}.wwtiles{display:grid;grid-template-columns:1fr 1fr;gap:8px}.wwtiles div{background:#eef2fb;border-radius:12px;padding:10px;text-align:center}.wwtiles b{display:block;font-size:24px;letter-spacing:-.04em;color:#142d5e}.wwtiles span{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:#74786f;font-weight:800}.wwconf{margin:12px 0 8px;font-size:12px}.wwconf i{display:block;height:6px;border-radius:9px;background:#e4e7ef;margin-top:6px;overflow:hidden}.wwconf u{display:block;height:100%;border-radius:9px}@media(max-width:560px){.wwscan-grid{grid-template-columns:1fr}}</style>
+<input id="wwSideInput" type="file" accept="image/*" class="hidden">
+<script>/* WEARWISE PRO SCAN: MediaPipe Pose Landmarker + body-outline segmentation, optional side photo, ellipse circumference */
+(function(){
+const BASE='https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14';
+const MODEL='https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
+let lmP=null;
+function getLM(){if(window.wwLandmarkerStub)return Promise.resolve(window.wwLandmarkerStub);
+ if(!lmP)lmP=(async()=>{const m=await import(BASE+'/vision_bundle.mjs');const fs=await m.FilesetResolver.forVisionTasks(BASE+'/wasm');
+  return m.PoseLandmarker.createFromOptions(fs,{baseOptions:{modelAssetPath:MODEL},runningMode:'IMAGE',numPoses:1,outputSegmentationMasks:true,minPoseDetectionConfidence:.5})})().catch(e=>{lmP=null;throw e});
+ return lmP}
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+function runs(m,w,row){const o=row*w,r=[];let s=-1;for(let x=0;x<w;x++){const on=m[o+x]>.5;if(on&&s<0)s=x;if(!on&&s>=0){r.push([s,x-1]);s=-1}}if(s>=0)r.push([s,w-1]);return r}
+function bodyRun(m,w,row,cx){const rs=runs(m,w,row);if(!rs.length)return null;let best=null,bd=1e9;for(const r of rs){const d=cx>=r[0]&&cx<=r[1]?0:Math.min(Math.abs(cx-r[0]),Math.abs(cx-r[1]));if(d<bd||(d===bd&&r[1]-r[0]>best[1]-best[0])){bd=d;best=r}}return best}
+function band(m,w,h,row,cxf,half){const a=[];for(let r=Math.round(row-half);r<=Math.round(row+half);r++){if(r<0||r>=h)continue;const u=bodyRun(m,w,r,cxf(r));if(u)a.push([u[1]-u[0]+1,u])}a.sort((p,q)=>p[0]-q[0]);return a.length?a[a.length>>1]:null}
+/* Measure body widths (cm) at chest, waist and hip levels from a landmark set + person mask. */
+function scan(lm,m,w,h,H,side){
+ const P=i=>({x:lm[i].x*w,y:lm[i].y*h,v:lm[i].visibility==null?1:lm[i].visibility});
+ const ls=P(11),rs=P(12),lh=P(23),rh=P(24);
+ if(Math.min(ls.v,rs.v,lh.v,rh.v)<.35)return{error:"We couldn't see your shoulders and hips clearly. Stand straight, full body in frame, in good light."};
+ let top=-1,bot=-1;
+ for(let r=0;r<h&&top<0;r++){const o=r*w;for(let x=0;x<w;x++)if(m[o+x]>.5){top=r;break}}
+ for(let r=h-1;r>=0&&bot<0;r--){const o=r*w;for(let x=0;x<w;x++)if(m[o+x]>.5){bot=r;break}}
+ if(top<0)return{error:"No person outline found. Use a plain background and good light."};
+ if(top<=1||bot>=h-2)return{error:"Your head or feet are cut off. Step back so you are fully inside the frame."};
+ const cmpp=H/(bot-top),sm={x:(ls.x+rs.x)/2,y:(ls.y+rs.y)/2},hm={x:(lh.x+rh.x)/2,y:(lh.y+rh.y)/2},T=hm.y-sm.y;
+ if(T<h*.08)return{error:"We couldn't read your torso. Try a clearer full-body photo."};
+ const cx=r=>sm.x+(hm.x-sm.x)*Math.min(1.2,Math.max(-.2,(r-sm.y)/T)),bh=(bot-top)*.008;
+ const chestY=sm.y+.34*T,c=band(m,w,h,chestY,cx,bh*2);
+ let wst=null,wy=0;for(let r=sm.y+.52*T;r<=sm.y+.86*T;r+=2){const u=band(m,w,h,r,cx,bh);if(u&&(!wst||u[0]<wst[0])){wst=u;wy=r}}
+ let hip=null,hy=0;for(let r=hm.y-.02*T;r<=hm.y+.22*T;r+=2){const u=band(m,w,h,r,cx,bh);if(u&&(!hip||u[0]>hip[0])){hip=u;hy=r}}
+ if(!c||!wst||!hip)return{error:"We couldn't trace your outline at chest, waist and hip. Try a plainer background."};
+ let cw=c[0],ww=wst[0],hw=hip[0],merged=false;const shl=dist(ls,rs);
+ if(!side&&cw>1.12*shl){merged=true;cw=.93*shl;ww=Math.min(ww,cw)}
+ const warn=[],lean=Math.abs(Math.atan2(hm.x-sm.x,hm.y-sm.y))*180/Math.PI,tilt=Math.abs(Math.atan2(rs.y-ls.y,rs.x-ls.x))*180/Math.PI;
+ if(lean>10)warn.push("You seem to lean, or the phone is tilted. Stand straight and hold the camera level.");
+ if(!side&&Math.min(tilt,180-tilt)>8)warn.push("Your shoulders look uneven. Keep the camera level and shoulders relaxed.");
+ if(merged)warn.push("Your arms touch your body, which hides the true torso width. Hold your arms about 30° away from your sides and retake.");
+ if(!side&&shl/T<.5)warn.push("You may be turned sideways. Face the camera straight on for the front photo.");
+ return{w:{chest:cw*cmpp,waist:ww*cmpp,hip:hw*cmpp},rows:{chest:chestY,waist:wy,hip:hy},runs:{chest:c[1],waist:wst[1],hip:hip[1]},cmpp,merged,warn,top,bot};
+}
+async function analyse(lm,url,side){
+ const img=await loadImg(url),sc=Math.min(1,960/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
+ cv.width=Math.round(img.naturalWidth*sc);cv.height=Math.round(img.naturalHeight*sc);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
+ const res=lm.detect(cv);if(!res.landmarks||!res.landmarks.length)return{error:"No person detected. Use a full-body photo in good light."};
+ const mk=res.segmentationMasks&&res.segmentationMasks[0];if(!mk)return{error:"The outline model returned no mask."};
+ const w=mk.width,h=mk.height,data=new Float32Array(mk.getAsFloat32Array());if(mk.close)mk.close();
+ const H=readHeight(),s=scan(res.landmarks[0],data,w,h,H,side);s.cv=cv;s.mask=data;s.mw=w;s.mh=h;return s}
+const ell=(W,Dp)=>{const a=W/2,b=Dp/2;return Math.PI*(3*(a+b)-Math.sqrt((3*a+b)*(a+3*b)))};
+const RATIO={Women:{chest:.76,waist:.72,hip:.70},Men:{chest:.72,waist:.76,hip:.68}};
+function circ(f,s,k,dept,bmi){const W=f.w[k];let d;if(s&&!s.error&&s.w)d=s.w[k];else{let r=RATIO[dept][k];if(bmi)r=Math.min(r*1.15,Math.max(r*.88,r*(1+.018*(bmi-22))));d=W*r}return ell(W,d)}
+function draw(cv,f,est){
+ const sc=Math.min(1,340/f.mw),W=Math.round(f.mw*sc),Hh=Math.round(f.mh*sc);cv.width=W;cv.height=Hh;const g=cv.getContext('2d');
+ g.drawImage(f.cv,0,0,W,Hh);const o=document.createElement('canvas');o.width=f.mw;o.height=f.mh;const og=o.getContext('2d'),id=og.createImageData(f.mw,f.mh);
+ for(let i=0;i<f.mask.length;i++)if(f.mask[i]>.5){id.data[i*4]=61;id.data[i*4+1]=107;id.data[i*4+2]=255;id.data[i*4+3]=95}
+ og.putImageData(id,0,0);g.drawImage(o,0,0,W,Hh);g.font='bold 12px Arial';g.lineWidth=2;
+ [['chest','Chest'],['waist','Waist'],['hip','Hip']].forEach(([k,l])=>{const y=f.rows[k]*sc,r=f.runs[k];g.strokeStyle='#fff';g.fillStyle='#142d5e';g.beginPath();g.moveTo(r[0]*sc,y);g.lineTo(r[1]*sc,y);g.stroke();
+  const t=l+' '+est[k]+' cm',tw=g.measureText(t).width+10;g.fillRect(4,y-9,tw,18);g.fillStyle='#fff';g.fillText(t,9,y+4)})}
+function card(est,f){const col=est.confScore>=75?'#1b7f3b':est.confScore>=55?'#b7791f':'#c62828';
+ return '<div class="wwscan"><div class="kicker">WEARWISE body scan'+(est.method.includes('side')?' · front + side':' · front only')+'</div><div class="wwscan-grid"><canvas id="wwScanCv"></canvas><div><div class="wwtiles"><div><b>'+est.chest+'</b><span>Chest cm</span></div><div><b>'+est.waist+'</b><span>Waist cm</span></div><div><b>'+est.hip+'</b><span>Hip cm</span></div><div><b>'+est.height+'</b><span>Height cm</span></div></div><div class="wwconf"><span>Confidence <b style="color:'+col+'">'+est.confLabel+'</b> · about ±'+est.unc+' cm</span><i><u style="width:'+est.confScore+'%;background:'+col+'"></u></i></div>'+
+ (est.method.includes('side')?'<button class="button outline small" id="wwSideRemove">Remove side photo</button>':'<p class="form-note" style="margin:10px 0 6px">Add a side-on photo to measure real body depth and tighten accuracy.</p><button class="button small" id="wwSideBtn">Add side photo ↗</button>')+'</div></div></div>'}
+const oldRun=window.runDetection;
+window.runDetection=async function(){
+ const box=$('#fitResult');if(!box||!state.photoURL)return;const tok=++detectToken,H=readHeight();
+ if(!H){box.innerHTML='<div class="form-error">Enter your height (120–220 cm) so the photo can be scaled, then press “Detect my size”.</div>';return}
+ box.innerHTML='<div class="result-box" style="text-align:center"><div class="wwg-spin" style="margin:6px auto 14px;width:40px;height:40px;border:4px solid #d5def0;border-top-color:#142d5e;border-radius:50%;animation:wwg-s .8s linear infinite"></div><strong>Scanning your outline…</strong><p>Loading the body-scan model (first time takes a few seconds).</p></div>';
+ let lm;try{lm=await getLM()}catch(e){console.warn('Pro scan unavailable, using fallback',e);if(tok===detectToken)return oldRun();return}
+ try{
+  const dept=$('#fitDept').value,f=await analyse(lm,state.photoURL,false);if(tok!==detectToken)return;
+  if(f.error){box.innerHTML='<div class="form-error">'+escapeHTML(f.error)+'</div>';return}
+  let s=null,sideNote=[];
+  if(state.sideURL&&state.sidePair===state.photoURL){s=await analyse(lm,state.sideURL,true);if(tok!==detectToken)return;if(s.error){sideNote.push('Side photo ignored: '+s.error);s=null}}
+  const wt=numVal('#fitWeight',30,250),bmi=wt?wt/Math.pow(H/100,2):0,warn=f.warn.concat(sideNote,s?s.warn:[]);
+  const est={chest:Math.round(circ(f,s,'chest',dept,bmi)),waist:Math.round(circ(f,s,'waist',dept,bmi)),hip:Math.round(circ(f,s,'hip',dept,bmi)),height:Math.round(H),warn,method:s?'segmentation+side':'segmentation'};
+  let sc=55+(s?25:0)+(warn.length?0:10)-(f.merged?20:0)-(f.warn.filter(x=>/lean|uneven/.test(x)).length*8);sc=Math.max(15,Math.min(95,sc));
+  est.confScore=sc;est.confLabel=sc>=75?'High':sc>=55?'Medium':'Low';est.unc=Math.round((s?2.5:4.5)*(f.merged?1.5:1)*10)/10;
+  applyTape(est);state.bodyEst=est;renderFitResult();
+  box.insertAdjacentHTML('afterbegin',card(est,f));draw($('#wwScanCv'),f,est);
+  const sb=$('#wwSideBtn');if(sb)sb.onclick=()=>$('#wwSideInput').click();const sr=$('#wwSideRemove');if(sr)sr.onclick=()=>{state.sideURL=null;runDetection()};
+ }catch(e){console.error(e);if(tok===detectToken)box.innerHTML='<div class="form-error">The body scan hit an error. Please retake the photo. No size was guessed.</div>'}
+};
+document.getElementById('wwSideInput').addEventListener('change',e=>{const file=e.target.files&&e.target.files[0];if(!file||!file.type.startsWith('image/'))return;if(state.sideURL)URL.revokeObjectURL(state.sideURL);state.sideURL=URL.createObjectURL(file);state.sidePair=state.photoURL;e.target.value='';runDetection()});
 })();
 </script>
 </body>
