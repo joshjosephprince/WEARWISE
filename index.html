@@ -718,7 +718,7 @@ function updateAccountButton(){const b=$("#accountBtn");b.textContent=state.user
 function openAccount(){if(state.user){openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div style="padding:30px"><div class="kicker">Account / demo session</div><h2 style="font-size:34px;letter-spacing:-.07em">HEY, ${escapeHTML((state.user.name||"SHOPPER").split(" ")[0].toUpperCase())}.</h2><p class="muted">${escapeHTML(state.user.email||"Demo mode")}<br>Account features are simulated locally. No secure profile database is connected.</p><div style="display:grid;gap:10px;margin-top:22px"><button class="button outline full" id="profileOrders">Order history (demo)</button><button class="button dark full" id="logoutBtn">Log out</button></div></div>`,true);$("#profileOrders").onclick=()=>toast("No real orders are stored in this prototype.");$("#logoutBtn").onclick=()=>{state.user=null;updateAccountButton();closeModal();toast("Logged out")}}else openAuth("signup")}
 function fitDeptOf(p){return p&&p.sec==="Women"?"Women":"Men"}
 function fitOptions(dept,selId){return products.filter(x=>fitDeptOf(x)===dept).map(x=>`<option value="${x.id}" ${x.id===selId?"selected":""}>${escapeHTML(x.name)} — ${escapeHTML(x.brand)}</option>`).join("")}
-const UPLOAD_IDLE=`<div class="big-icon">▧</div><strong>Take or upload a full-body photo</strong><p class="form-note">Stand 2–3 m from the camera with your whole body in frame, facing forward, arms slightly away from your body, fitted clothing, good light. Your size is detected automatically.</p><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload photo</button></div>`;
+const UPLOAD_IDLE=`<div class="big-icon">▧</div><strong>Take or upload a full-body photo</strong><p class="form-note">Stand 2–3 m from the camera with your head to at least your knees in frame (full body is best), facing forward, arms slightly away from your body, fitted clothing, good light. Your size is detected automatically.</p><div class="upload-actions"><button class="button small" id="startCamera">Open camera</button><button class="button outline small" id="choosePhoto">Upload photo</button></div>`;
 function openFitCheck(){closeDrawer();stopCamera();if(!state.lastFitProduct)state.lastFitProduct=products[0];const p=state.lastFitProduct,dept=fitDeptOf(p);state.photoURL=null;state.photoFile=null;state.lastFitResult=null;state.bodyEst=null;detectToken++;
 openModal(`<button class="close-btn modal-close" id="modalClose" aria-label="Close">×</button><div class="fit-layout"><aside class="fit-aside"><div class="eyebrow">WEARWISE / Fit Check</div><h2>FIND YOUR<br>ACTUAL<br><span style="color:var(--lime)">FIT.</span></h2><p>Choose your department, then take or upload a full-body photo. WEARWISE detects your body outline in the browser and matches your estimated measurements to the size chart automatically.</p><div style="margin-top:25px;border-top:1px solid #30342b;padding-top:18px;font-size:10px;letter-spacing:.1em;color:#b7bbae">01 DEPARTMENT · 02 PHOTO · 03 YOUR SIZE</div></aside><div class="fit-main"><div class="kicker">01 / Choose department</div><div class="field"><label for="fitDept">Department</label><select id="fitDept"><option value="Women" ${dept==="Women"?"selected":""}>Women</option><option value="Men" ${dept==="Men"?"selected":""}>Men &amp; unisex</option></select></div><div class="field"><label for="fitHeight">Your height (cm) — used to scale the photo</label><input id="fitHeight" type="number" inputmode="decimal" min="120" max="220" step="0.5" placeholder="e.g. 168" value="${state.height||""}"></div><div class="field"><label for="fitWeight">Weight (kg) — optional, improves accuracy</label><input id="fitWeight" type="number" inputmode="decimal" placeholder="e.g. 62"></div><div class="field"><label>Optional: your tape measurements (cm) — most accurate</label><div style="display:flex;gap:8px"><input id="fitChest" type="number" inputmode="decimal" placeholder="Chest / bust"><input id="fitWaist" type="number" inputmode="decimal" placeholder="Waist"></div></div><div class="field"><label>02 / Photo</label><div class="upload-box" id="uploadBox"><div id="uploadContents">${UPLOAD_IDLE}</div></div><div id="cameraControls" class="hidden" style="margin-top:10px"><video id="cameraVideo" class="camera-video" autoplay playsinline></video><div class="upload-actions"><button class="button small" id="timerPhoto">Start 10 s timer</button><button class="button small" id="capturePhoto">Capture now</button><button class="button outline small" id="flipCamera">Flip camera</button><button class="button outline small" id="stopCameraBtn">Stop camera</button></div></div></div><button class="button dark full" id="analyzeBtn">Detect my size ↗</button><div id="fitResult"></div></div></div>`);
 $("#fitDept").onchange=()=>{const d=$("#fitDept").value;const list=products.filter(x=>fitDeptOf(x)===d);state.lastFitProduct=list[0];state.bodyEst=null;$("#fitResult").innerHTML="";if(state.photoURL)runDetection()};
@@ -1748,9 +1748,10 @@ function scan(lm,m,w,h,H,side){
  for(let r=0;r<h&&top<0;r++){const o=r*w;for(let x=0;x<w;x++)if(m[o+x]>.5){top=r;break}}
  for(let r=h-1;r>=0&&bot<0;r--){const o=r*w;for(let x=0;x<w;x++)if(m[o+x]>.5){bot=r;break}}
  if(top<0)return{error:"No person outline found. Use a plain background and good light."};
- if(top<=1||bot>=h-2)return{error:"Your head or feet are cut off. Step back so you are fully inside the frame."};
- const cmpp=H/(bot-top),sm={x:(ls.x+rs.x)/2,y:(ls.y+rs.y)/2},hm={x:(lh.x+rh.x)/2,y:(lh.y+rh.y)/2},T=hm.y-sm.y;
- if(T<h*.08)return{error:"We couldn't read your torso. Try a clearer full-body photo."};
+ const cut=top<=1||bot>=h-2;
+ let cmpp=H/(bot-top);const sm={x:(ls.x+rs.x)/2,y:(ls.y+rs.y)/2},hm={x:(lh.x+rh.x)/2,y:(lh.y+rh.y)/2},T=hm.y-sm.y;
+ if(T<h*.08||hm.y>h*.985)return{error:"We couldn't read your torso. Make sure your head, shoulders and hips are inside the frame."};
+ let partial=false;if(cut){const nz=P(0);let S=T/.288;if(nz.v>.5&&nz.y>=0&&dist(nz,hm)>T)S=(S+dist(nz,hm)/.395)/2;cmpp=H/S;partial=true}
  const cx=r=>sm.x+(hm.x-sm.x)*Math.min(1.2,Math.max(-.2,(r-sm.y)/T)),bh=(bot-top)*.008;
  const chestY=sm.y+.34*T,c=band(m,w,h,chestY,cx,bh*2);
  let wst=null,wy=0;for(let r=sm.y+.52*T;r<=sm.y+.86*T;r+=2){const u=band(m,w,h,r,cx,bh);if(u&&(!wst||u[0]<wst[0])){wst=u;wy=r}}
@@ -1761,12 +1762,12 @@ function scan(lm,m,w,h,H,side){
  const warn=[],lean=Math.abs(Math.atan2(hm.x-sm.x,hm.y-sm.y))*180/Math.PI,tilt=Math.abs(Math.atan2(rs.y-ls.y,rs.x-ls.x))*180/Math.PI;
  if(lean>10)warn.push("You seem to lean, or the phone is tilted. Stand straight and hold the camera level.");
  if(!side&&Math.min(tilt,180-tilt)>8)warn.push("Your shoulders look uneven. Keep the camera level and shoulders relaxed.");
- if(merged)warn.push("Your arms touch your body, which hides the true torso width. Hold your arms about 30° away from your sides and retake.");
+ if(!cut&&(bot-top)/h<.55)warn.push("You look quite far from the camera, which lowers precision. Move a little closer while keeping your whole body in frame.");if(partial)warn.push("Your feet weren't fully in frame, so scale was estimated from your upper body. Accuracy is slightly lower; step back for the best result.");if(merged)warn.push("Your arms touch your body, which hides the true torso width. Hold your arms about 30° away from your sides and retake.");
  if(!side&&shl/T<.5)warn.push("You may be turned sideways. Face the camera straight on for the front photo.");
- return{w:{chest:cw*cmpp,waist:ww*cmpp,hip:hw*cmpp},rows:{chest:chestY,waist:wy,hip:hy},runs:{chest:c[1],waist:wst[1],hip:hip[1]},cmpp,merged,warn,top,bot};
+ return{partial,w:{chest:cw*cmpp,waist:ww*cmpp,hip:hw*cmpp},rows:{chest:chestY,waist:wy,hip:hy},runs:{chest:c[1],waist:wst[1],hip:hip[1]},cmpp,merged,warn,top,bot};
 }
 async function analyse(lm,url,side){
- const img=await loadImg(url),sc=Math.min(1,960/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
+ const img=await loadImg(url),sc=Math.min(1,1280/Math.max(img.naturalWidth,img.naturalHeight)),cv=document.createElement('canvas');
  cv.width=Math.round(img.naturalWidth*sc);cv.height=Math.round(img.naturalHeight*sc);cv.getContext('2d').drawImage(img,0,0,cv.width,cv.height);
  const res=lm.detect(cv);if(!res.landmarks||!res.landmarks.length)return{error:"No person detected. Use a full-body photo in good light."};
  const mk=res.segmentationMasks&&res.segmentationMasks[0];if(!mk)return{error:"The outline model returned no mask."};
@@ -1774,7 +1775,7 @@ async function analyse(lm,url,side){
  const H=readHeight(),s=scan(res.landmarks[0],data,w,h,H,side);s.cv=cv;s.mask=data;s.mw=w;s.mh=h;return s}
 const ell=(W,Dp)=>{const a=W/2,b=Dp/2;return Math.PI*(3*(a+b)-Math.sqrt((3*a+b)*(a+3*b)))};
 const RATIO={Women:{chest:.76,waist:.72,hip:.70},Men:{chest:.72,waist:.76,hip:.68}};
-function circ(f,s,k,dept,bmi){const W=f.w[k];let d;if(s&&!s.error&&s.w)d=s.w[k];else{let r=RATIO[dept][k];if(bmi)r=Math.min(r*1.15,Math.max(r*.88,r*(1+.018*(bmi-22))));d=W*r}return ell(W,d)}
+function circ(f,s,k,dept,bmi){const W=f.w[k];let d;if(s&&!s.error&&s.w)d=s.w[k];else{let r=RATIO[dept][k];if(bmi)r=Math.min(r*1.15,Math.max(r*.88,r*(1+.012*(bmi-22))));d=W*r}return ell(W,d)*({chest:1.10,waist:1.05,hip:1.04})[k]}
 function draw(cv,f,est){
  const sc=Math.min(1,340/f.mw),W=Math.round(f.mw*sc),Hh=Math.round(f.mh*sc);cv.width=W;cv.height=Hh;const g=cv.getContext('2d');
  g.drawImage(f.cv,0,0,W,Hh);const o=document.createElement('canvas');o.width=f.mw;o.height=f.mh;const og=o.getContext('2d'),id=og.createImageData(f.mw,f.mh);
@@ -1782,7 +1783,7 @@ function draw(cv,f,est){
  og.putImageData(id,0,0);g.drawImage(o,0,0,W,Hh);g.font='bold 12px Arial';g.lineWidth=2;
  [['chest','Chest'],['waist','Waist'],['hip','Hip']].forEach(([k,l])=>{const y=f.rows[k]*sc,r=f.runs[k];g.strokeStyle='#fff';g.fillStyle='#142d5e';g.beginPath();g.moveTo(r[0]*sc,y);g.lineTo(r[1]*sc,y);g.stroke();
   const t=l+' '+est[k]+' cm',tw=g.measureText(t).width+10;g.fillRect(4,y-9,tw,18);g.fillStyle='#fff';g.fillText(t,9,y+4)})}
-function card(est,f){const col=est.confScore>=75?'#1b7f3b':est.confScore>=55?'#b7791f':'#c62828';
+function card(est,f){const col=est.confScore>=75?'#1b7f3b':est.confScore>=45?'#b7791f':'#c62828';
  return '<div class="wwscan"><div class="kicker">WEARWISE body scan'+(est.method.includes('side')?' · front + side':' · front only')+'</div><div class="wwscan-grid"><canvas id="wwScanCv"></canvas><div><div class="wwtiles"><div><b>'+est.chest+'</b><span>Chest cm</span></div><div><b>'+est.waist+'</b><span>Waist cm</span></div><div><b>'+est.hip+'</b><span>Hip cm</span></div><div><b>'+est.height+'</b><span>Height cm</span></div></div><div class="wwconf"><span>Confidence <b style="color:'+col+'">'+est.confLabel+'</b> · about ±'+est.unc+' cm</span><i><u style="width:'+est.confScore+'%;background:'+col+'"></u></i></div>'+
  (est.method.includes('side')?'<button class="button outline small" id="wwSideRemove">Remove side photo</button>':'<p class="form-note" style="margin:10px 0 6px">Add a side-on photo to measure real body depth and tighten accuracy.</p><button class="button small" id="wwSideBtn">Add side photo ↗</button>')+'</div></div></div>'}
 const oldRun=window.runDetection;
@@ -1798,8 +1799,8 @@ window.runDetection=async function(){
   if(state.sideURL&&state.sidePair===state.photoURL){s=await analyse(lm,state.sideURL,true);if(tok!==detectToken)return;if(s.error){sideNote.push('Side photo ignored: '+s.error);s=null}}
   const wt=numVal('#fitWeight',30,250),bmi=wt?wt/Math.pow(H/100,2):0,warn=f.warn.concat(sideNote,s?s.warn:[]);
   const est={chest:Math.round(circ(f,s,'chest',dept,bmi)),waist:Math.round(circ(f,s,'waist',dept,bmi)),hip:Math.round(circ(f,s,'hip',dept,bmi)),height:Math.round(H),warn,method:s?'segmentation+side':'segmentation'};
-  let sc=55+(s?25:0)+(warn.length?0:10)-(f.merged?20:0)-(f.warn.filter(x=>/lean|uneven/.test(x)).length*8);sc=Math.max(15,Math.min(95,sc));
-  est.confScore=sc;est.confLabel=sc>=75?'High':sc>=55?'Medium':'Low';est.unc=Math.round((s?2.5:4.5)*(f.merged?1.5:1)*10)/10;
+  let sc=55+(s?25:0)+(warn.length?0:10)-(f.merged?20:0)-(f.partial?10:0)-(f.warn.filter(x=>/lean|uneven/.test(x)).length*8);sc=Math.max(15,Math.min(95,sc));
+  est.confScore=sc;est.confLabel=sc>=75?'High':sc>=45?'Medium':'Low';est.unc=Math.round((s?2.5:4.5)*(f.merged?1.5:1)*(f.partial?1.4:1)*10)/10;
   applyTape(est);state.bodyEst=est;renderFitResult();
   box.insertAdjacentHTML('afterbegin',card(est,f));draw($('#wwScanCv'),f,est);
   const sb=$('#wwSideBtn');if(sb)sb.onclick=()=>$('#wwSideInput').click();const sr=$('#wwSideRemove');if(sr)sr.onclick=()=>{state.sideURL=null;runDetection()};
